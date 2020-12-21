@@ -2,6 +2,7 @@ use std::fs::File;
 use std::io;
 use std::io::prelude::*;
 
+use crate::cpu::PROGRAM_START;
 use crate::cpu::Cpu;
 
 pub struct Chip8 {
@@ -15,11 +16,14 @@ impl Chip8 {
 
     pub fn load_rom(&mut self, path: &str) -> io::Result<()> {
         let program_data = Chip8::load_rom_file(path)?;
-        let offset = 0x200;
         for i in 0..program_data.len() {
-            self.cpu.write(offset + i, program_data[i]);
+            self.cpu.write(PROGRAM_START + (i as u16), program_data[i]);
         }
         Ok(())
+    }
+
+    pub fn run_cycle(&mut self) {
+        self.cpu.run_instruction();
     }
 
     fn load_rom_file(path: &str) -> io::Result<Vec<u8>> {
@@ -45,6 +49,18 @@ mod test {
         match rom {
             Err(e) => panic!("Rom did not load."),
             _ => (),
+        }
+    }
+
+    #[test]
+    fn run_first_cycle() {
+        let mut chip8 = Chip8::new();
+        let rom = chip8.load_rom("roms/invaders");
+        match rom {
+            Err(e) => panic!("Rom did not load."),
+            _ => {
+                chip8.run_cycle(); // Run one cycle once.
+            },
         }
     }
 }
