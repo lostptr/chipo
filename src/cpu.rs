@@ -1,4 +1,4 @@
-use crate::screen::Screen;
+use crate::keyboard::Keyboard;
 use std::fmt;
 
 /// Chip-8 has 16 sprites of 5 bytes (16 * 5 = 80)
@@ -24,6 +24,8 @@ const BUILT_IN_FONTSET: [u8; 80] = [
 ];
 
 pub const PROGRAM_START: u16 = 0x200;
+pub const SCREEN_WIDTH: usize = 64;
+pub const SCREEN_HEIGHT: usize = 32;
 
 pub struct Cpu {
     // CHIP-8 has 4K memory
@@ -43,19 +45,20 @@ pub struct Cpu {
     pub pc: u16,
 
     // Screen of 64x32, pixels have only one color.
-    pub screen: [u8; 64 * 32],
+    pub screen: [u32; SCREEN_WIDTH * SCREEN_HEIGHT],
 
     // These two timers work the same way.
     // Counted at 60 Hz. When set above zero, they count down to zero.
     pub delay_timer: u8,
     pub sound_timer: u8, // Makes a buzz sound when reaches zero.
 
-    // Stack and stack pointer (sp)
-    pub stack: [u16; 16],
-    pub sp: usize,
+    // Stack
+    pub stack: Vec<u16>,
 
     // Keyboard
-    pub key: [u8; 16],
+    pub input: Keyboard,
+
+    pub draw_flag: bool,
 }
 
 impl Cpu {
@@ -66,16 +69,17 @@ impl Cpu {
             i: 0,
             pc: PROGRAM_START,
 
-            screen: [0; 64 * 32],
+            screen: [0; SCREEN_WIDTH * SCREEN_HEIGHT],
 
             delay_timer: 0,
             sound_timer: 0,
 
-            stack: [0; 16],
-            sp: 0,
+            stack: vec![],
 
-            key: [0; 16],
+            input: Keyboard::new(),
             opcode: 0,
+
+            draw_flag: false
         };
 
         // Place the font sprites int the interpreter area of the ram
@@ -94,7 +98,7 @@ impl Cpu {
         self.memory[address as usize] = value;
     }
 
-    pub fn run_instruction(&mut self) {
+    pub fn run_instruction(&mut self) {    
         // opcodes are 16-bit (must read and combine two bytes)
         let low = self.read(self.pc) as u16;
         let high = self.read(self.pc + 1) as u16;
@@ -106,7 +110,15 @@ impl Cpu {
         if high == 0 && low == 0 {
             panic!()
         }
+
+        self.draw_flag = false;
+
         match opcode & 0xF000 {
+            0x0000 => match opcode & 0x00FF {
+                0x00E0 => self.op_00e0(),
+                0x00EE => self.op_00ee(),
+                _ => panic!("0x0: Unrecognized opcode {:#X}", opcode),
+            },
             0x1000 => {
                 let address = opcode & 0x0FFF;
                 self.op_1nnn(address);
@@ -130,15 +142,39 @@ impl Cpu {
                 let value = (opcode & 0x00FF) as u8;
                 self.op_7xnn(x, value);
             }
+            0x8000 => {
+                let x = ((opcode & 0x0F00) >> 8) as usize;
+                let y = ((opcode & 0x00F0) >> 4) as usize;
+                match opcode & 0x000F {
+                    0x0000 => self.op_8xy0(x, y),
+                    0x0001 => self.op_8xy1(x, y),
+                    0x0002 => self.op_8xy2(x, y),
+                    0x0003 => self.op_8xy3(x, y),
+                    0x0004 => self.op_8xy4(x, y),
+                    0x0005 => self.op_8xy5(x, y),
+                    0x0006 => self.op_8xy6(x, y),
+                    0x0007 => self.op_8xy7(x, y),
+                    0x000E => self.op_8xye(x, y),
+                    _ => panic!("0x8: Unrecognized opcode {:#X}", opcode),
+                }
+            }
             0xA000 => {
                 let value = opcode & 0x0FFF;
                 self.op_annn(value);
             }
             0xD000 => {
-                let x = ((opcode & 0x0F00) >> 8) as u8;
-                let y = ((opcode & 0x00F0) >> 4) as u8;
+                let x = ((opcode & 0x0F00) >> 8) as usize;
+                let y = ((opcode & 0x00F0) >> 4) as usize;
                 let nibble = (opcode & 0x000F) as u8;
                 self.op_dxyn(x, y, nibble);
+            }
+            0xE000 => {
+                let x = ((opcode & 0x0F00) >> 8) as usize;
+                match opcode & 0x00FF {
+                    0x009E => self.op_ex9e(x),
+                    0x00A1 => self.op_exa1(x),
+                    _ => panic!("0xE: Unrecognized opcode {:#X}", opcode),
+                }
             }
             0xF000 => {
                 let x = ((opcode & 0x0F00) >> 8) as usize;
@@ -152,13 +188,32 @@ impl Cpu {
                     0x0033 => self.op_fx33(x),
                     0x0055 => self.op_fx55(x),
                     0x0065 => self.op_fx65(x),
-                    _ => panic!("Unrecognized opcode {:#X}", opcode),
+                    _ => panic!("0xF: Unrecognized opcode {:#X}", opcode),
                 }
             }
             _ => panic!("Unrecognized opcode {:#X}", opcode),
         }
 
         println!("{:#?}", self);
+    }
+
+    /// ## 0x00E0
+    /// Clears the screen.
+    fn op_00e0(&mut self) {
+        for pixel in self.screen.iter_mut() {
+            *pixel = 0;
+        }
+        self.draw_flag = true;
+    }
+
+    /// ## 0x00EE
+    /// Returns from subroutine.
+    fn op_00ee(&mut self) {
+        if let Some(value) = self.stack.pop() {
+            self.pc = value;
+        } else {
+            panic!("Tried to pop the stack but it is empty!");
+        }
     }
 
     /// ## 0x1NNN
@@ -170,8 +225,7 @@ impl Cpu {
     /// ## 0x2NNN
     /// Calls subroutine on address NNN and increments the stack.
     fn op_2nnn(&mut self, nnn: u16) {
-        self.stack[self.sp] = self.pc;
-        self.sp += 1;
+        self.stack.push(self.pc);
         self.pc = nnn;
     }
 
@@ -198,6 +252,64 @@ impl Cpu {
         self.inc_pc();
     }
 
+    /// ## 0x8XY0
+    /// Sets VX to the value of VY
+    fn op_8xy0(&mut self, x: usize, y: usize) {
+        self.v[x] = self.v[y];
+        self.inc_pc();
+    }
+
+    /// ## 0x8XY1
+    /// Sets VX to (VX 'OR' VY)
+    fn op_8xy1(&mut self, x: usize, y: usize) {
+        self.v[x] = self.v[x] | self.v[y];
+        self.inc_pc();
+    }
+
+    /// ## 0x8XY2
+    /// Sets VX to (VX 'AND' VY)
+    fn op_8xy2(&mut self, x: usize, y: usize) {
+        self.v[x] = self.v[x] & self.v[y];
+        self.inc_pc();
+    }
+
+    /// ## 0x8XY3
+    /// Sets VX to (VX 'XOR' VY)
+    fn op_8xy3(&mut self, x: usize, y: usize) {
+        self.v[x] = self.v[x] ^ self.v[y];
+        self.inc_pc();
+    }
+
+    /// ## 0x8XY4
+    /// ???
+    fn op_8xy4(&mut self, _x: usize, _y: usize) {
+        todo!();
+    }
+
+    /// ## 0x8XY5
+    /// ???
+    fn op_8xy5(&mut self, _x: usize, _y: usize) {
+        todo!();
+    }
+
+    /// ## 0x8XY6
+    /// ???
+    fn op_8xy6(&mut self, _x: usize, _y: usize) {
+        todo!();
+    }
+
+    /// ## 0x8XY7
+    /// ???
+    fn op_8xy7(&mut self, _x: usize, _y: usize) {
+        todo!();
+    }
+
+    /// ## 0x8XYE
+    /// ???
+    fn op_8xye(&mut self, _x: usize, _y: usize) {
+        todo!();
+    }
+
     /// ## 0xANNN
     /// Sets I to NNN
     fn op_annn(&mut self, nnn: u16) {
@@ -207,48 +319,82 @@ impl Cpu {
 
     /// ## 0xDXYN
     /// Draws to the screen and checks when there's pixel collision.
-    fn op_dxyn(&mut self, x: u8, y: u8, height: u8) {
-        println!("Drawing sprite at ({}, {})", x, y);
-        for h in 0..height {
-            let mut pixel = self.read(self.i + (h as u16));
+    fn op_dxyn(&mut self, x: usize, y: usize, height: u8) {
+        let x_pos = self.v[x] % (SCREEN_WIDTH as u8);
+        let y_pos = self.v[y] % (SCREEN_HEIGHT as u8);
+
+        // Set pixel collision false.
+        self.v[0xF] = 0;
+
+        for row in 0..height {
+            let mut pixel = self.read(self.i + (row as u16));
 
             // Width is 8 bytes
-            for _ in 0..8 {
-                match (pixel & 0b1000_0000) >> 7 {
-                    0 => print!("░"),
-                    1 => print!("█"),
-                    _ => unreachable!(),
+            for col in 0..8 {
+                if self.set_screen_pixel(x_pos + col, y_pos + row, (pixel & 0b1000_0000) >> 7) {
+                    self.v[0xF] = 1; // There was pixel colision.
                 }
                 pixel = pixel << 1;
-            }
-            print!("\n");
+            }            
         }
+        
+        self.draw_flag = true;
+        self.inc_pc();
+    }
 
-        print!("\n");
+    fn set_screen_pixel(&mut self, x: u8, y: u8, value: u8) -> bool {
+        let old = self.screen[x as usize + (y as usize) * SCREEN_WIDTH];
+        
+        if value > 0 {
+            self.screen[x as usize + (y as usize) * SCREEN_WIDTH] ^= 0xFFFFFF;
+        } else {
+            self.screen[x as usize + (y as usize) * SCREEN_WIDTH] ^= 0x000000;
+        }         
+
+        self.screen[x as usize + (y as usize) * SCREEN_WIDTH] != old
+    }
+
+    /// ## 0xEX9E
+    /// Skips the next instruction if the key in VX is pressed.
+    fn op_ex9e(&mut self, x: usize) {
+        let key = self.v[x];
+        if self.input.is_key_pressed(key) {
+            self.inc_pc();
+        }
+        self.inc_pc();
+    }
+
+    /// ## 0xEXA1
+    /// Skips the next instruction if the key in VX is NOT pressed.
+    fn op_exa1(&mut self, x: usize) {
+        let key = self.v[x];
+        if !self.input.is_key_pressed(key) {
+            self.inc_pc();
+        }
         self.inc_pc();
     }
 
     /// ## 0xFX07
     /// ???
-    fn op_fx07(&mut self, x: usize) {
+    fn op_fx07(&mut self, _x: usize) {
         todo!();
     }
 
     /// ## 0xFX0A
     /// ???
-    fn op_fx0a(&mut self, x: usize) {
+    fn op_fx0a(&mut self, _x: usize) {
         todo!();
     }
 
     /// ## 0xFX15
     /// ???
-    fn op_fx15(&mut self, x: usize) {
+    fn op_fx15(&mut self, _x: usize) {
         todo!();
     }
 
     /// ## 0xFX18
     /// ???
-    fn op_fx18(&mut self, x: usize) {
+    fn op_fx18(&mut self, _x: usize) {
         todo!();
     }
 
@@ -261,26 +407,32 @@ impl Cpu {
 
     /// ## 0xFX29
     /// ???
-    fn op_fx29(&mut self, x: usize) {
+    fn op_fx29(&mut self, _x: usize) {
         todo!();
     }
 
     /// ## 0xFX33
     /// ???
-    fn op_fx33(&mut self, x: usize) {
+    fn op_fx33(&mut self, _x: usize) {
         todo!();
     }
 
     /// ## 0xFX55
-    /// ???
+    /// Stores the bytes from V0 to VX(inclusive) into memory starting from the address stored in I.
     fn op_fx55(&mut self, x: usize) {
-        todo!();
+        for offset in 0..x + 1 {
+            self.write(self.i + offset as u16, self.v[offset]);
+        }
+        self.inc_pc();
     }
 
     /// ## 0xFX65
-    /// ???
+    /// Fills V0 to VX(inclusive) with bytes starting from the address stored in I.
     fn op_fx65(&mut self, x: usize) {
-        todo!();
+        for offset in 0..x + 1 {
+            self.v[offset] = self.read(self.i + offset as u16);
+        }
+        self.inc_pc();
     }
 
     /// Increments PC by 2
@@ -297,15 +449,7 @@ impl fmt::Debug for Cpu {
         for vx in self.v.iter() {
             write!(f, "{:#X}|", vx)?;
         }
-        write!(f, "\nStack: (sp {}) [", self.sp)?;
-        for sp in 0..self.stack.len() {
-            if sp == self.sp {
-                write!(f, " *{:#X},", self.stack[sp])?;
-            } else {
-                write!(f, " {:#X},", self.stack[sp])?;
-            }
-        }
-        write!(f, "]\n")?;
+        write!(f, "\nStack: {:?}\n", self.stack)?;
 
         Ok(())
     }

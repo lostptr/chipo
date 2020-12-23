@@ -1,17 +1,41 @@
+extern crate minifb;
+
+use minifb::{Key, ScaleMode, Window, WindowOptions};
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
 
-use crate::cpu::PROGRAM_START;
-use crate::cpu::Cpu;
+use crate::cpu::{Cpu, PROGRAM_START, SCREEN_HEIGHT, SCREEN_WIDTH};
 
 pub struct Chip8 {
-    pub cpu: Cpu,
+    cpu: Cpu,
+    window: Window,
 }
 
 impl Chip8 {
     pub fn new() -> Self {
-        Chip8 { cpu: Cpu::new() }
+        let mut window = Window::new(
+            "CHIPO",
+            SCREEN_WIDTH,
+            SCREEN_HEIGHT,
+            WindowOptions {
+                resize: true,
+                scale: minifb::Scale::X8,
+                scale_mode: ScaleMode::AspectRatioStretch,
+                ..WindowOptions::default()
+            },
+        )
+        .unwrap_or_else(|e| {
+            panic!("{}", e);
+        });
+
+        // Limit to max ~60 fps update rate
+        window.limit_update_rate(Some(std::time::Duration::from_micros(16600)));
+
+        Chip8 { 
+            window,
+            cpu: Cpu::new(),            
+        }
     }
 
     pub fn load_rom(&mut self, path: &str) -> io::Result<()> {
@@ -24,6 +48,16 @@ impl Chip8 {
 
     pub fn run_cycle(&mut self) {
         self.cpu.run_instruction();
+
+        if self.cpu.draw_flag {
+            self.update_window();            
+        }        
+    }
+
+    pub fn update_window(&mut self){
+        self.window
+            .update_with_buffer(&self.cpu.screen, SCREEN_WIDTH, SCREEN_HEIGHT)
+            .unwrap();
     }
 
     fn load_rom_file(path: &str) -> io::Result<Vec<u8>> {
@@ -34,6 +68,10 @@ impl Chip8 {
         println!("Loaded '{}' ({} bytes read)", path, bytes_read);
 
         Ok(buffer)
+    }
+
+    pub fn is_running(&self) -> bool {
+        self.window.is_open() && !self.window.is_key_down(Key::Escape)
     }
 }
 
