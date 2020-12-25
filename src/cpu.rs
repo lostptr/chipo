@@ -28,35 +28,38 @@ pub const SCREEN_WIDTH: usize = 64;
 pub const SCREEN_HEIGHT: usize = 32;
 
 pub struct Cpu {
-    // CHIP-8 has 4K memory
+    /// CHIP-8 has 4K memory
     pub memory: [u8; 4096],
 
-    // Opcodes are two bytes
+    /// Opcodes are two bytes
     pub opcode: u16,
 
-    // CPU Registers; there are 16, 1 byte, registers.
-    // From V0 to VF
+    /// CPU Registers; there are 16, 1 byte, registers.
+    /// From V0 to VF
     pub v: [u8; 16],
 
-    // Index register 'I'
+    /// Index register 'I'
     pub i: u16,
 
-    // Program Counter (PC)
+    /// Program Counter (PC)
     pub pc: u16,
 
-    // Screen of 64x32, pixels have only one color.
+    /// Screen of 64x32, pixels have only one color.
     pub screen: [u32; SCREEN_WIDTH * SCREEN_HEIGHT],
 
-    // These two timers work the same way.
-    // Counted at 60 Hz. When set above zero, they count down to zero.
+    /// These two timers work the same way.
+    /// Counted at 60 Hz. When set above zero, they count down to zero.
     pub delay_timer: u8,
     pub sound_timer: u8, // Makes a buzz sound when reaches zero.
 
-    // Stack
+    /// Call stack
     pub stack: Vec<u16>,
 
-    // Keyboard
-    pub input: Keyboard,
+    /// Keyboard with 16 keys.
+    /// 
+    /// For simplicity I'm using a bool slice but I could use 
+    /// a single u16 and check the key presses with bitwise operations.
+    pub keys: [bool; 16],
 
     pub draw_flag: bool,
 }
@@ -76,10 +79,10 @@ impl Cpu {
 
             stack: vec![],
 
-            input: Keyboard::new(),
+            keys: [false; 16],
             opcode: 0,
 
-            draw_flag: false
+            draw_flag: false,
         };
 
         // Place the font sprites int the interpreter area of the ram
@@ -98,7 +101,7 @@ impl Cpu {
         self.memory[address as usize] = value;
     }
 
-    pub fn run_instruction(&mut self) {    
+    pub fn run_instruction(&mut self) {
         // opcodes are 16-bit (must read and combine two bytes)
         let low = self.read(self.pc) as u16;
         let high = self.read(self.pc + 1) as u16;
@@ -335,21 +338,21 @@ impl Cpu {
                     self.v[0xF] = 1; // There was pixel colision.
                 }
                 pixel = pixel << 1;
-            }            
+            }
         }
-        
+
         self.draw_flag = true;
         self.inc_pc();
     }
 
     fn set_screen_pixel(&mut self, x: u8, y: u8, value: u8) -> bool {
         let old = self.screen[x as usize + (y as usize) * SCREEN_WIDTH];
-        
+
         if value > 0 {
             self.screen[x as usize + (y as usize) * SCREEN_WIDTH] ^= 0xFFFFFF;
         } else {
             self.screen[x as usize + (y as usize) * SCREEN_WIDTH] ^= 0x000000;
-        }         
+        }
 
         self.screen[x as usize + (y as usize) * SCREEN_WIDTH] != old
     }
@@ -357,8 +360,8 @@ impl Cpu {
     /// ## 0xEX9E
     /// Skips the next instruction if the key in VX is pressed.
     fn op_ex9e(&mut self, x: usize) {
-        let key = self.v[x];
-        if self.input.is_key_pressed(key) {
+        let key = self.keys[self.v[x] as usize];
+        if key {
             self.inc_pc();
         }
         self.inc_pc();
@@ -367,8 +370,8 @@ impl Cpu {
     /// ## 0xEXA1
     /// Skips the next instruction if the key in VX is NOT pressed.
     fn op_exa1(&mut self, x: usize) {
-        let key = self.v[x];
-        if !self.input.is_key_pressed(key) {
+        let key = self.keys[self.v[x] as usize];
+        if !key {
             self.inc_pc();
         }
         self.inc_pc();

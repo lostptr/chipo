@@ -32,9 +32,9 @@ impl Chip8 {
         // Limit to max ~60 fps update rate
         window.limit_update_rate(Some(std::time::Duration::from_micros(16600)));
 
-        Chip8 { 
+        Chip8 {
             window,
-            cpu: Cpu::new(),            
+            cpu: Cpu::new(),
         }
     }
 
@@ -50,14 +50,27 @@ impl Chip8 {
         self.cpu.run_instruction();
 
         if self.cpu.draw_flag {
-            self.update_window();            
-        }        
+            self.update_window();
+        }
+
+        self.store_key_press();
     }
 
-    pub fn update_window(&mut self){
+    pub fn update_window(&mut self) {
         self.window
             .update_with_buffer(&self.cpu.screen, SCREEN_WIDTH, SCREEN_HEIGHT)
             .unwrap();
+    }
+
+    pub fn store_key_press(&mut self) {
+        self.cpu.keys = [false; 16];
+        if let Some(keys) = self.window.get_keys() {
+            for key in keys {
+                if let Some(chip8_key) = Chip8::get_chip8_key_code(key) {
+                    self.cpu.keys[chip8_key as usize] = true;
+                }
+            }
+        }
     }
 
     fn load_rom_file(path: &str) -> io::Result<Vec<u8>> {
@@ -72,6 +85,29 @@ impl Chip8 {
 
     pub fn is_running(&self) -> bool {
         self.window.is_open() && !self.window.is_key_down(Key::Escape)
+    }
+
+    /// This is what maps the chip8 keys to the keyboard.
+    fn get_chip8_key_code(key: minifb::Key) -> Option<u8>{
+        match key {
+            Key::Key1 => Some(0x1),
+            Key::Key2 => Some(0x2),
+            Key::Key3 => Some(0x3),
+            Key::Key4 => Some(0xC),
+            Key::Q => Some(0x4),
+            Key::W => Some(0x5),
+            Key::E => Some(0x6),
+            Key::R => Some(0xD),
+            Key::A => Some(0x7),
+            Key::S => Some(0x8),
+            Key::D => Some(0x9),
+            Key::F => Some(0xE),
+            Key::Z => Some(0xA),
+            Key::X => Some(0x0),
+            Key::C => Some(0xB),
+            Key::V => Some(0xF),
+            _ => None,
+        }
     }
 }
 
@@ -98,7 +134,7 @@ mod test {
             Err(e) => panic!("Rom did not load."),
             _ => {
                 chip8.run_cycle(); // Run one cycle once.
-            },
+            }
         }
     }
 }
