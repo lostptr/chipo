@@ -56,8 +56,8 @@ pub struct Cpu {
     pub stack: Vec<u16>,
 
     /// Keyboard with 16 keys.
-    /// 
-    /// For simplicity I'm using a bool slice but I could use 
+    ///
+    /// For simplicity I'm using a bool slice but I could use
     /// a single u16 and check the key presses with bitwise operations.
     pub keys: [bool; 16],
 
@@ -160,6 +160,11 @@ impl Cpu {
                     0x000E => self.op_8xye(x, y),
                     _ => panic!("0x8: Unrecognized opcode {:#X}", opcode),
                 }
+            }
+            0x9000 => {
+                let x = ((opcode & 0x0F00) >> 8) as usize;
+                let y = ((opcode & 0x00F0) >> 4) as usize;
+                self.op_9xy0(x, y);
             }
             0xA000 => {
                 let value = opcode & 0x0FFF;
@@ -284,33 +289,84 @@ impl Cpu {
     }
 
     /// ## 0x8XY4
-    /// ???
-    fn op_8xy4(&mut self, _x: usize, _y: usize) {
-        todo!();
+    /// Sets VX = VX + VY, VF = carry flag
+    fn op_8xy4(&mut self, x: usize, y: usize) {
+        let sum: u16 = self.v[x] as u16 + self.v[y] as u16;
+
+        if sum > 255 {
+            self.v[0xF] = 1;
+        } else {
+            self.v[0xf] = 0;
+        }
+
+        self.v[x] = (sum & 0x00FF) as u8;
     }
 
     /// ## 0x8XY5
-    /// ???
-    fn op_8xy5(&mut self, _x: usize, _y: usize) {
-        todo!();
+    /// Sets VX = VX - VY, VF = not borrow flag
+    fn op_8xy5(&mut self, x: usize, y: usize) {
+        let diff: i16 = self.v[x] as i16 - self.v[y] as i16;
+
+        if self.v[x] > self.v[y] {
+            self.v[0xF] = 1;
+        } else {
+            self.v[0xF] = 0;
+        }
+
+        // Unsure about this!
+        self.v[x] = diff.abs() as u8;
     }
 
     /// ## 0x8XY6
-    /// ???
-    fn op_8xy6(&mut self, _x: usize, _y: usize) {
-        todo!();
+    /// Set VX = VX SHIFT RIGHT 1, VF = the least significant bit.
+    fn op_8xy6(&mut self, x: usize, _y: usize) {
+        let least_bit = self.v[x] & 0b0000_0001;
+
+        if least_bit == 0 {
+            self.v[0xF] = 0;
+        } else {
+            self.v[0xF] = 1;
+        }
+
+        self.v[x] = self.v[x] >> 1;
     }
 
     /// ## 0x8XY7
-    /// ???
-    fn op_8xy7(&mut self, _x: usize, _y: usize) {
-        todo!();
+    /// Set VX = VY - VX. VF = not borrow flag.
+    fn op_8xy7(&mut self, x: usize, y: usize) {
+        let diff: i16 = self.v[y] as i16 - self.v[x] as i16;
+
+        if self.v[y] > self.v[x] {
+            self.v[0xF] = 1;
+        } else {
+            self.v[0xF] = 0;
+        }
+
+        // Unsure about this!
+        self.v[x] = diff.abs() as u8;
     }
 
     /// ## 0x8XYE
-    /// ???
-    fn op_8xye(&mut self, _x: usize, _y: usize) {
-        todo!();
+    /// Set VX = VX SHIFT LEFT 1, VF = the most significant bit.
+    fn op_8xye(&mut self, x: usize, _y: usize) {
+        let most_bit = self.v[x] & 0b1000_0000;
+
+        if most_bit == 0 {
+            self.v[0xF] = 0;
+        } else {
+            self.v[0xF] = 1;
+        }
+
+        self.v[x] = self.v[x] << 1;
+    }
+
+    /// ## 0x9XY0
+    /// Skip next instruction if VX != VY
+    fn op_9xy0(&mut self, x: usize, y:usize) {
+        if self.v[x] != self.v[y] {
+            self.inc_pc();
+        }
+        self.inc_pc();
     }
 
     /// ## 0xANNN
