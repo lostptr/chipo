@@ -137,4 +137,16 @@ mod test {
             }
         }
     }
+
+    #[test]
+    fn opcodes(){
+        
+        let mut chip8 = Chip8::new();
+        chip8.load_rom("roms/test_opcode.ch8").unwrap();
+
+        while chip8.is_running() {
+            chip8.run_cycle();
+        }
+
+    }
 }

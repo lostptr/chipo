@@ -13,25 +13,25 @@ fn main() -> io::Result<()> {
     // let nn: u8 = (opcode & 0x00FF) as u8;
     // println!("{:#X} --> x:{} | nn: {:#X}", opcode, x, nn);
 
-    // let mut chip8 = Chip8::new();
-    // chip8.load_rom("roms/invaders")?;
+    let mut chip8 = Chip8::new();
+    chip8.load_rom("roms/test_opcode.ch8")?;
 
-    // while chip8.is_running() {
-    //     chip8.run_cycle();
-    // }
-
-    let a: u8 = 0b0111_0000;    
-
-    let bit = a & 0b1000_0000;
-
-    if bit == 0 {
-        println!("bit is zero");
-    } else {
-        println!("bit is one");
+    while chip8.is_running() {
+        chip8.run_cycle();
     }
+
+    // let a: u8 = 0b0111_0000;    
+
+    // let bit = a & 0b1000_0000;
+
+    // if bit == 0 {
+    //     println!("bit is zero");
+    // } else {
+    //     println!("bit is one");
+    // }
     
 
-    println!("a: {:#010b}\nnew a: {:#010b}\n???: {:#010b}", a, a >> 1, a / 2);
+    // println!("a: {:#010b}\nnew a: {:#010b}\n???: {:#010b}", a, a >> 1, a / 2);
 
     // let mut buffer: Vec<u32> = vec![0; 32 * 64];
     // let mut window = Window::new(

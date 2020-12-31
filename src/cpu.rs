@@ -1,4 +1,5 @@
 use crate::keyboard::Keyboard;
+use rand::{prelude::ThreadRng, thread_rng, Rng};
 use std::fmt;
 
 /// Chip-8 has 16 sprites of 5 bytes (16 * 5 = 80)
@@ -62,6 +63,8 @@ pub struct Cpu {
     pub keys: [bool; 16],
 
     pub draw_flag: bool,
+
+    rng: ThreadRng,
 }
 
 impl Cpu {
@@ -83,6 +86,7 @@ impl Cpu {
             opcode: 0,
 
             draw_flag: false,
+            rng: thread_rng(),
         };
 
         // Place the font sprites int the interpreter area of the ram
@@ -135,6 +139,16 @@ impl Cpu {
                 let value = (opcode & 0x00FF) as u8;
                 self.op_3xnn(x, value);
             }
+            0x4000 => {
+                let x = ((opcode & 0x0F00) >> 8) as usize;
+                let value = (opcode & 0x00FF) as u8;
+                self.op_4xnn(x, value);
+            }
+            0x5000 => {
+                let x = ((opcode & 0x0F00) >> 8) as usize;
+                let y = ((opcode & 0x00F0) >> 4) as usize;
+                self.op_5xy0(x, y);
+            }
             0x6000 => {
                 let x = ((opcode & 0x0F00) >> 8) as usize;
                 let value = (opcode & 0x00FF) as u8;
@@ -169,6 +183,15 @@ impl Cpu {
             0xA000 => {
                 let value = opcode & 0x0FFF;
                 self.op_annn(value);
+            }
+            0xB000 => {
+                let value = opcode & 0x0FFF;
+                self.op_bnnn(value);
+            }
+            0xC000 => {
+                let x = ((opcode & 0x0F00) >> 8) as usize;
+                let value = (opcode & 0x00FF) as u8;
+                self.op_cxnn(x, value);
             }
             0xD000 => {
                 let x = ((opcode & 0x0F00) >> 8) as usize;
@@ -241,6 +264,24 @@ impl Cpu {
     /// Skips next instruction if VX equals NN.
     fn op_3xnn(&mut self, x: usize, nn: u8) {
         if self.v[x] == nn {
+            self.inc_pc();
+        }
+        self.inc_pc();
+    }
+
+    /// ## 0x4XNN
+    /// Skips next instruction if VX not equals NN.
+    fn op_4xnn(&mut self, x: usize, nn: u8) {
+        if self.v[x] != nn {
+            self.inc_pc();
+        }
+        self.inc_pc();
+    }
+
+    /// ## 0x5XY0
+    /// Skips next instruction if VX equals VY.
+    fn op_5xy0(&mut self, x: usize, y: usize) {
+        if self.v[x] == self.v[y] {
             self.inc_pc();
         }
         self.inc_pc();
@@ -362,7 +403,7 @@ impl Cpu {
 
     /// ## 0x9XY0
     /// Skip next instruction if VX != VY
-    fn op_9xy0(&mut self, x: usize, y:usize) {
+    fn op_9xy0(&mut self, x: usize, y: usize) {
         if self.v[x] != self.v[y] {
             self.inc_pc();
         }
@@ -373,6 +414,20 @@ impl Cpu {
     /// Sets I to NNN
     fn op_annn(&mut self, nnn: u16) {
         self.i = nnn;
+        self.inc_pc();
+    }
+
+    /// ## 0xBNNN
+    /// Jumps to address NNN + V0
+    fn op_bnnn(&mut self, nnn: u16) {
+        self.pc = nnn + (self.v[0] as u16);
+    }
+
+    /// ## 0xCXNN
+    /// Sets VX to a random number[0-255] bitwise `AND` NN.
+    fn op_cxnn(&mut self, x: usize, nn: u8) {
+        let random_num: u8 = self.rng.gen();
+        self.v[x] = random_num & nn;
         self.inc_pc();
     }
 
@@ -511,5 +566,25 @@ impl fmt::Debug for Cpu {
         write!(f, "\nStack: {:?}\n", self.stack)?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn rng() {
+        let mut cpu = Cpu::new();
+
+        for _ in 0..10 {
+            let n: u8 = cpu.rng.gen();            
+
+            if n < 0 || n > 255 {
+                panic!("Random number generator out of bounds [0-255]");
+            } else {
+                println!("Number generated: {}", n);
+            }
+        }
     }
 }
