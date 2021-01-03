@@ -108,6 +108,25 @@ impl Cpu {
         self.memory[address as usize] = value;
     }
 
+    /// Draws on screen (gonna be a bit more especific later...)
+    /// Returns `true` if there's pixel collision.
+    fn set_screen_pixel(&mut self, x: u8, y: u8, value: u8) -> bool {
+        let old = self.screen[x as usize + (y as usize) * SCREEN_WIDTH];
+
+        if value > 0 {
+            self.screen[x as usize + (y as usize) * SCREEN_WIDTH] ^= 0xFFFFFF;
+        } else {
+            self.screen[x as usize + (y as usize) * SCREEN_WIDTH] ^= 0x000000;
+        }
+
+        self.screen[x as usize + (y as usize) * SCREEN_WIDTH] != old
+    }
+
+     /// Increments PC by 2
+     fn inc_pc(&mut self) {
+        self.pc += 2;
+    }
+
     pub fn run_instruction(&mut self) {
         // opcodes are 16-bit (must read and combine two bytes)
         let low = self.read(self.pc) as u16;
@@ -457,19 +476,7 @@ impl Cpu {
 
         self.draw_flag = true;
         self.inc_pc();
-    }
-
-    fn set_screen_pixel(&mut self, x: u8, y: u8, value: u8) -> bool {
-        let old = self.screen[x as usize + (y as usize) * SCREEN_WIDTH];
-
-        if value > 0 {
-            self.screen[x as usize + (y as usize) * SCREEN_WIDTH] ^= 0xFFFFFF;
-        } else {
-            self.screen[x as usize + (y as usize) * SCREEN_WIDTH] ^= 0x000000;
-        }
-
-        self.screen[x as usize + (y as usize) * SCREEN_WIDTH] != old
-    }
+    }  
 
     /// ## 0xEX9E
     /// Skips the next instruction if the key in VX is pressed.
@@ -550,12 +557,7 @@ impl Cpu {
             self.v[offset] = self.read(self.i + offset as u16);
         }
         self.inc_pc();
-    }
-
-    /// Increments PC by 2
-    fn inc_pc(&mut self) {
-        self.pc += 2;
-    }
+    }   
 }
 
 impl fmt::Debug for Cpu {
