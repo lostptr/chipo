@@ -23,6 +23,7 @@ const BUILT_IN_FONTSET: [u8; 80] = [
     0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
     0xF0, 0x80, 0xF0, 0x80, 0x80, // F
 ];
+const FONTSET_START_ADDRESS: u16 = 0x0;
 
 pub const PROGRAM_START: u16 = 0x200;
 pub const SCREEN_WIDTH: usize = 64;
@@ -90,7 +91,9 @@ impl Cpu {
         };
 
         // Place the font sprites int the interpreter area of the ram
-        for i in 0..BUILT_IN_FONTSET.len() {
+        let start_of_fontset = FONTSET_START_ADDRESS as usize;
+        let end_of_fontset = start_of_fontset + BUILT_IN_FONTSET.len();        
+        for i in start_of_fontset..end_of_fontset {
             cpu.memory[i] = BUILT_IN_FONTSET[i];
         }
 
@@ -489,9 +492,9 @@ impl Cpu {
     }
 
     /// ## 0xFX07
-    /// ???
-    fn op_fx07(&mut self, _x: usize) {
-        todo!();
+    /// Sets VX to the value in the delay timer.
+    fn op_fx07(&mut self, x: usize) {
+        self.v[x] = self.delay_timer;   
     }
 
     /// ## 0xFX0A
@@ -501,28 +504,28 @@ impl Cpu {
     }
 
     /// ## 0xFX15
-    /// ???
-    fn op_fx15(&mut self, _x: usize) {
-        todo!();
+    /// Sets delay timer to VX.
+    fn op_fx15(&mut self, x: usize) {
+        self.delay_timer = self.v[x];
     }
 
     /// ## 0xFX18
-    /// ???
-    fn op_fx18(&mut self, _x: usize) {
-        todo!();
+    /// Sets sound timer to VX.
+    fn op_fx18(&mut self, x: usize) {
+        self.sound_timer = self.v[x];
     }
 
     /// ## 0xFX1E
-    /// ???
+    /// Adds VX to I, does not affect VF(carry flag).
     fn op_fx1e(&mut self, x: usize) {
         self.i += self.v[x] as u16;
         self.inc_pc();
     }
 
     /// ## 0xFX29
-    /// ???
-    fn op_fx29(&mut self, _x: usize) {
-        todo!();
+    /// Sets I to the address of the sprite for digit in VX.
+    fn op_fx29(&mut self, x: usize) {
+        self.i = FONTSET_START_ADDRESS + (self.v[x] as u16 * 5);
     }
 
     /// ## 0xFX33
