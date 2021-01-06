@@ -108,18 +108,32 @@ impl Cpu {
         self.memory[address as usize] = value;
     }
 
+    pub fn tick_timers(&mut self) {
+        if self.delay_timer > 0 {
+            self.delay_timer -= 1;
+        }
+        
+        if self.sound_timer > 0 {
+            self.sound_timer -= 1;
+        }        
+    }
+
+    fn get_screen_index(x: u8, y: u8) -> usize {
+        ((usize::from(y) * SCREEN_WIDTH) + usize::from(x))
+    }
+
     /// Draws on screen (gonna be a bit more especific later...)
     /// Returns `true` if there's pixel collision.
     fn set_screen_pixel(&mut self, x: u8, y: u8, value: u8) -> bool {
-        let old = self.screen[x as usize + (y as usize) * SCREEN_WIDTH];
+        let old = self.screen[Cpu::get_screen_index(x, y)];
 
         if value > 0 {
-            self.screen[x as usize + (y as usize) * SCREEN_WIDTH] ^= 0xFFFFFF;
+            self.screen[Cpu::get_screen_index(x, y)] ^= 0xFFFFFF;
         } else {
-            self.screen[x as usize + (y as usize) * SCREEN_WIDTH] ^= 0x000000;
+            self.screen[Cpu::get_screen_index(x, y)] ^= 0x000000;
         }
 
-        self.screen[x as usize + (y as usize) * SCREEN_WIDTH] != old
+        self.screen[Cpu::get_screen_index(x, y)] != old
     }
 
     /// Increments PC by 2
@@ -247,7 +261,7 @@ impl Cpu {
             _ => panic!("Unrecognized opcode {:#X}", opcode),
         }
 
-        println!("{:#?}", self);
+        //println!("{:#?}", self);
     }
 
     /// ## 0x00E0
@@ -257,6 +271,8 @@ impl Cpu {
             *pixel = 0;
         }
         self.draw_flag = true;
+
+        self.inc_pc();
     }
 
     /// ## 0x00EE
@@ -363,6 +379,7 @@ impl Cpu {
         }
 
         self.v[x] = (sum & 0x00FF) as u8;
+        self.inc_pc();
     }
 
     /// ## 0x8XY5
@@ -378,6 +395,7 @@ impl Cpu {
 
         // Unsure about this!
         self.v[x] = diff.abs() as u8;
+        self.inc_pc();
     }
 
     /// ## 0x8XY6
@@ -392,6 +410,7 @@ impl Cpu {
         }
 
         self.v[x] = self.v[x] >> 1;
+        self.inc_pc();
     }
 
     /// ## 0x8XY7
@@ -407,6 +426,7 @@ impl Cpu {
 
         // Unsure about this!
         self.v[x] = diff.abs() as u8;
+        self.inc_pc();
     }
 
     /// ## 0x8XYE
@@ -421,6 +441,7 @@ impl Cpu {
         }
 
         self.v[x] = self.v[x] << 1;
+        self.inc_pc();
     }
 
     /// ## 0x9XY0
@@ -470,6 +491,7 @@ impl Cpu {
                 if self.set_screen_pixel(x_pos + col, y_pos + row, (pixel & 0b1000_0000) >> 7) {
                     self.v[0xF] = 1; // There was pixel colision.
                 }
+
                 pixel = pixel << 1;
             }
         }
@@ -502,6 +524,7 @@ impl Cpu {
     /// Sets VX to the value in the delay timer.
     fn op_fx07(&mut self, x: usize) {
         self.v[x] = self.delay_timer;
+        self.inc_pc();
     }
 
     /// ## 0xFX0A
@@ -520,12 +543,14 @@ impl Cpu {
     /// Sets delay timer to VX.
     fn op_fx15(&mut self, x: usize) {
         self.delay_timer = self.v[x];
+        self.inc_pc();
     }
 
     /// ## 0xFX18
     /// Sets sound timer to VX.
     fn op_fx18(&mut self, x: usize) {
         self.sound_timer = self.v[x];
+        self.inc_pc();
     }
 
     /// ## 0xFX1E
@@ -539,6 +564,7 @@ impl Cpu {
     /// Sets I to the address of the sprite for digit in VX.
     fn op_fx29(&mut self, x: usize) {
         self.i = FONTSET_START_ADDRESS + (self.v[x] as u16 * 5);
+        self.inc_pc();
     }
 
     /// ## 0xFX33
@@ -555,6 +581,7 @@ impl Cpu {
         value /= 10;
 
         self.write(self.i, value % 10);
+        self.inc_pc();
     }
 
     /// ## 0xFX55

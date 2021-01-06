@@ -3,6 +3,7 @@
 extern crate minifb;
 
 use std::io;
+use std::time::Instant;
 
 use chipo::chip8::Chip8;
 //use minifb::{Key, ScaleMode, Window, WindowOptions};
@@ -14,10 +15,18 @@ fn main() -> io::Result<()> {
     // println!("{:#X} --> x:{} | nn: {:#X}", opcode, x, nn);
 
     let mut chip8 = Chip8::new();
-    chip8.load_rom("roms/test_opcode.ch8")?;
+    chip8.load_rom("roms/invaders")?;
+
+    let clock_speed: u128 = 60 / 60;
+    let mut last_cycle = Instant::now();
 
     while chip8.is_running() {
-        chip8.run_cycle();
+        let dt = last_cycle.elapsed().as_millis();
+
+        if dt > clock_speed {
+            last_cycle = Instant::now();
+            chip8.run_cycle();
+        }        
     }
 
     // let a: u8 = 0b0111_0000;    

@@ -48,6 +48,7 @@ impl Chip8 {
 
     pub fn run_cycle(&mut self) {
         self.cpu.run_instruction();
+        self.cpu.tick_timers();
 
         if self.cpu.draw_flag {
             self.update_window();
@@ -71,7 +72,7 @@ impl Chip8 {
                 }
             }
         }
-    }
+    }   
 
     fn load_rom_file(path: &str) -> io::Result<Vec<u8>> {
         let mut file = File::open(path)?;
