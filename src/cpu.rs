@@ -92,7 +92,7 @@ impl Cpu {
 
         // Place the font sprites int the interpreter area of the ram
         let start_of_fontset = FONTSET_START_ADDRESS as usize;
-        let end_of_fontset = start_of_fontset + BUILT_IN_FONTSET.len();        
+        let end_of_fontset = start_of_fontset + BUILT_IN_FONTSET.len();
         for i in start_of_fontset..end_of_fontset {
             cpu.memory[i] = BUILT_IN_FONTSET[i];
         }
@@ -122,8 +122,8 @@ impl Cpu {
         self.screen[x as usize + (y as usize) * SCREEN_WIDTH] != old
     }
 
-     /// Increments PC by 2
-     fn inc_pc(&mut self) {
+    /// Increments PC by 2
+    fn inc_pc(&mut self) {
         self.pc += 2;
     }
 
@@ -476,7 +476,7 @@ impl Cpu {
 
         self.draw_flag = true;
         self.inc_pc();
-    }  
+    }
 
     /// ## 0xEX9E
     /// Skips the next instruction if the key in VX is pressed.
@@ -501,7 +501,7 @@ impl Cpu {
     /// ## 0xFX07
     /// Sets VX to the value in the delay timer.
     fn op_fx07(&mut self, x: usize) {
-        self.v[x] = self.delay_timer;   
+        self.v[x] = self.delay_timer;
     }
 
     /// ## 0xFX0A
@@ -536,9 +536,19 @@ impl Cpu {
     }
 
     /// ## 0xFX33
-    /// ???
-    fn op_fx33(&mut self, _x: usize) {
-        todo!();
+    /// Takes the decimal value of VX and store the digits in I, I+1 and I+2.
+    /// ### Example:
+    /// Let VX = 0xFE => 254 in decimal.
+    /// Then... I = 2, I+1 = 5, I+2 = 4
+    fn op_fx33(&mut self, x: usize) {
+        let mut value = self.v[x];
+        self.write(self.i + 2, value % 10);
+        value /= 10;
+
+        self.write(self.i + 1, value % 10);
+        value /= 10;
+
+        self.write(self.i, value % 10);
     }
 
     /// ## 0xFX55
@@ -557,7 +567,7 @@ impl Cpu {
             self.v[offset] = self.read(self.i + offset as u16);
         }
         self.inc_pc();
-    }   
+    }
 }
 
 impl fmt::Debug for Cpu {
@@ -583,7 +593,7 @@ mod test {
         let mut cpu = Cpu::new();
 
         for _ in 0..10 {
-            let n: u8 = cpu.rng.gen();            
+            let n: u8 = cpu.rng.gen();
 
             if n < 0 || n > 255 {
                 panic!("Random number generator out of bounds [0-255]");
