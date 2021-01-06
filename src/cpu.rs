@@ -505,9 +505,15 @@ impl Cpu {
     }
 
     /// ## 0xFX0A
-    /// ???
-    fn op_fx0a(&mut self, _x: usize) {
-        todo!();
+    /// Waits for a key press and then stores that key in VX.
+    fn op_fx0a(&mut self, x: usize) {
+        for i in 0..16 {
+            if self.keys[i] {
+                self.v[x] = i as u8;
+                self.inc_pc();
+                return;
+            }
+        }
     }
 
     /// ## 0xFX15
