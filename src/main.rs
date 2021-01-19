@@ -15,7 +15,7 @@ fn main() -> io::Result<()> {
     // println!("{:#X} --> x:{} | nn: {:#X}", opcode, x, nn);
 
     let mut chip8 = Chip8::new();
-    chip8.load_rom("roms/invaders")?;
+    chip8.load_rom("roms/tetris")?;
 
     let clock_speed: u128 = 60 / 60;
     let mut last_cycle = Instant::now();

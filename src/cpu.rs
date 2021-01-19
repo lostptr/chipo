@@ -280,6 +280,7 @@ impl Cpu {
     fn op_00ee(&mut self) {
         if let Some(value) = self.stack.pop() {
             self.pc = value;
+            self.inc_pc();
         } else {
             panic!("Tried to pop the stack but it is empty!");
         }
