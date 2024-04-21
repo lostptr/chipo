@@ -1,4 +1,3 @@
-use crate::keyboard::Keyboard;
 use rand::{prelude::ThreadRng, thread_rng, Rng};
 use std::fmt;
 
@@ -47,7 +46,7 @@ pub struct Cpu {
     pub pc: u16,
 
     /// Screen of 64x32, pixels have only one color.
-    pub screen: [u32; SCREEN_WIDTH * SCREEN_HEIGHT],
+    pub screen: [u8; SCREEN_WIDTH * SCREEN_HEIGHT],
 
     /// These two timers work the same way.
     /// Counted at 60 Hz. When set above zero, they count down to zero.
@@ -112,14 +111,14 @@ impl Cpu {
         if self.delay_timer > 0 {
             self.delay_timer -= 1;
         }
-        
+
         if self.sound_timer > 0 {
             self.sound_timer -= 1;
-        }        
+        }
     }
 
     fn get_screen_index(x: u8, y: u8) -> usize {
-        ((usize::from(y) * SCREEN_WIDTH) + usize::from(x))
+        (usize::from(y) * SCREEN_WIDTH) + usize::from(x)
     }
 
     /// Draws on screen (gonna be a bit more especific later...)
@@ -128,9 +127,9 @@ impl Cpu {
         let old = self.screen[Cpu::get_screen_index(x, y)];
 
         if value > 0 {
-            self.screen[Cpu::get_screen_index(x, y)] ^= 0xFFFFFF;
+            self.screen[Cpu::get_screen_index(x, y)] ^= 0xFF;
         } else {
-            self.screen[Cpu::get_screen_index(x, y)] ^= 0x000000;
+            self.screen[Cpu::get_screen_index(x, y)] ^= 0x0000;
         }
 
         self.screen[Cpu::get_screen_index(x, y)] != old
@@ -147,20 +146,19 @@ impl Cpu {
         let high = self.read(self.pc + 1) as u16;
         let opcode = (low << 8) | high; // Big-Endian
 
-        //println!("instruction read: {:x?} (high: {:x?}, low: {:x?})", opcode, high, low);
-
-        //println!("instruction {:#x?} --> {:#x?}", opcode, opcode & 0xF000);
         if high == 0 && low == 0 {
             panic!()
         }
 
         self.draw_flag = false;
 
+        println!("opcode {:#X}", opcode);
+
         match opcode & 0xF000 {
             0x0000 => match opcode & 0x00FF {
                 0x00E0 => self.op_00e0(),
                 0x00EE => self.op_00ee(),
-                _ => panic!("0x0: Unrecognized opcode {:#X}", opcode),
+                _ => println!("0x0: Ignoring unrecognized opcode {:#X}", opcode),
             },
             0x1000 => {
                 let address = opcode & 0x0FFF;
@@ -236,6 +234,18 @@ impl Cpu {
                 self.op_dxyn(x, y, nibble);
             }
             0xE000 => {
+                // if self.keys.contains(&true) {
+                //     println!("opcode: {}", opcode);
+                //     println!(
+                //         "keys: {:?}",
+                //         self.keys.into_iter().enumerate().filter_map(|(i, k)| if k {
+                //             Some(i)
+                //         } else {
+                //             None
+                //         }).collect::<Vec<usize>>()
+                //     )
+                // }
+
                 let x = ((opcode & 0x0F00) >> 8) as usize;
                 match opcode & 0x00FF {
                     0x009E => self.op_ex9e(x),
@@ -260,8 +270,6 @@ impl Cpu {
             }
             _ => panic!("Unrecognized opcode {:#X}", opcode),
         }
-
-        //println!("{:#?}", self);
     }
 
     /// ## 0x00E0
@@ -373,29 +381,20 @@ impl Cpu {
     fn op_8xy4(&mut self, x: usize, y: usize) {
         let sum: u16 = self.v[x] as u16 + self.v[y] as u16;
 
-        if sum > 255 {
-            self.v[0xF] = 1;
-        } else {
-            self.v[0xf] = 0;
-        }
+        let carry_flag = if sum > 255 { 1 } else { 0 };
 
         self.v[x] = (sum & 0x00FF) as u8;
+        self.v[0xF] = carry_flag;
         self.inc_pc();
     }
 
     /// ## 0x8XY5
     /// Sets VX = VX - VY, VF = not borrow flag
     fn op_8xy5(&mut self, x: usize, y: usize) {
-        let diff: i16 = self.v[x] as i16 - self.v[y] as i16;
+        let (diff, overflow) = self.v[x].overflowing_sub(self.v[y]);
 
-        if self.v[x] > self.v[y] {
-            self.v[0xF] = 1;
-        } else {
-            self.v[0xF] = 0;
-        }
-
-        // Unsure about this!
-        self.v[x] = diff.abs() as u8;
+        self.v[x] = diff;
+        self.v[0xF] = if overflow { 0 } else { 1 };
         self.inc_pc();
     }
 
@@ -404,29 +403,20 @@ impl Cpu {
     fn op_8xy6(&mut self, x: usize, _y: usize) {
         let least_bit = self.v[x] & 0b0000_0001;
 
-        if least_bit == 0 {
-            self.v[0xF] = 0;
-        } else {
-            self.v[0xF] = 1;
-        }
+        let carry_flag = if least_bit == 0 { 0 } else { 1 };
 
         self.v[x] = self.v[x] >> 1;
+        self.v[0xF] = carry_flag;
         self.inc_pc();
     }
 
     /// ## 0x8XY7
     /// Set VX = VY - VX. VF = not borrow flag.
     fn op_8xy7(&mut self, x: usize, y: usize) {
-        let diff: i16 = self.v[y] as i16 - self.v[x] as i16;
+        let (diff, overflow) = self.v[y].overflowing_sub(self.v[x]);
 
-        if self.v[y] > self.v[x] {
-            self.v[0xF] = 1;
-        } else {
-            self.v[0xF] = 0;
-        }
-
-        // Unsure about this!
-        self.v[x] = diff.abs() as u8;
+        self.v[x] = diff;
+        self.v[0xF] = if overflow { 0 } else { 1 };
         self.inc_pc();
     }
 
@@ -435,13 +425,10 @@ impl Cpu {
     fn op_8xye(&mut self, x: usize, _y: usize) {
         let most_bit = self.v[x] & 0b1000_0000;
 
-        if most_bit == 0 {
-            self.v[0xF] = 0;
-        } else {
-            self.v[0xF] = 1;
-        }
+        let carry_flag = if most_bit == 0 { 0 } else { 1 };
 
         self.v[x] = self.v[x] << 1;
+        self.v[0xF] = carry_flag;
         self.inc_pc();
     }
 

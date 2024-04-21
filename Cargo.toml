@@ -2,10 +2,11 @@
 name = "chipo"
 version = "0.1.0"
 authors = ["SaviHex <leosavis@gmail.com>"]
-edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+edition = "2021"
 
 [dependencies]
-minifb = "0.19.1"
-rand = "0.8.0"
+env_logger = "0.11.3"
+pixels = "0.13.0"
+winit = { version = "0.29.15", features = ["rwh_05"] }
+winit_input_helper = "0.16.0"
+rand = "0.8.5"
