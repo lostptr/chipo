@@ -1,19 +1,16 @@
+use super::cpu::{Cpu, PROGRAM_START, SCREEN_HEIGHT, SCREEN_WIDTH};
+use crate::debug::egui_winit_framework::EguiWinitFramework;
+use pixels::{Pixels, SurfaceTexture};
 use std::{
     fs::File,
     io::{self, Read},
 };
-
-use pixels::{Pixels, SurfaceTexture};
 use winit::{
     dpi::LogicalSize,
-    error::EventLoopError,
-    event::{ElementState, Event, KeyEvent, WindowEvent},
-    event_loop::{ControlFlow, EventLoop, EventLoopWindowTarget},
-    keyboard::Key,
+    event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
+    event_loop::{ControlFlow, EventLoop},
     window::{Window, WindowBuilder},
 };
-
-use super::cpu::{Cpu, PROGRAM_START, SCREEN_HEIGHT, SCREEN_WIDTH};
 
 const SCALING: usize = 8;
 
@@ -26,9 +23,12 @@ pub struct Emulator {
 
 impl Emulator {
     pub fn new() -> Self {
-        let event_loop = EventLoop::new().unwrap();
+        let event_loop = EventLoop::new();
         let window = {
-            let size = LogicalSize::new((SCREEN_WIDTH * SCALING) as f64, (SCREEN_HEIGHT * SCALING) as f64);
+            let size = LogicalSize::new(
+                (SCREEN_WIDTH * SCALING) as f64,
+                (SCREEN_HEIGHT * SCALING) as f64,
+            );
             WindowBuilder::new()
                 .with_title("Chipo Emulator")
                 .with_inner_size(size)
@@ -37,13 +37,22 @@ impl Emulator {
                 .unwrap()
         };
 
-        let screen_renderer = {
+        let (screen_renderer, framework) = {
             let window_size = window.inner_size();
             let surface_texture =
                 SurfaceTexture::new(window_size.width, window_size.height, &window);
-            Pixels::new(SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32, surface_texture).unwrap()
+            let pixels =
+                Pixels::new(SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32, surface_texture).unwrap();
+            let framework = EguiWinitFramework::new(
+                &event_loop,
+                window_size.width,
+                window_size.height,
+                window.scale_factor() as f32,
+                &pixels,
+            );
+
+            (pixels, framework)
         };
-        event_loop.set_control_flow(ControlFlow::Poll);
 
         Self {
             window,
@@ -71,27 +80,29 @@ impl Emulator {
         Ok(buffer)
     }
 
-    pub fn run(mut self) -> Result<(), EventLoopError> {
-        self.event_loop
-            .run(move |event, event_loop_window_target| match event {
+    pub fn run(mut self) {
+        self.event_loop.run(move |event, _, control_flow| {
+            control_flow.set_poll();
+            match event {
                 Event::WindowEvent {
                     event: WindowEvent::CloseRequested,
                     ..
-                } => Emulator::exit(event_loop_window_target),
+                } => Emulator::exit(control_flow),
                 Event::WindowEvent {
-                    event: WindowEvent::KeyboardInput { event, .. },
+                    event: WindowEvent::KeyboardInput { input, .. },
                     ..
-                } => Emulator::on_input(&mut self.cpu, &event),
-                Event::AboutToWait => {
+                } => Emulator::on_input(&mut self.cpu, &input),
+                Event::MainEventsCleared => {
                     Emulator::update(&mut self.cpu, &mut self.window, &mut self.screen_renderer)
                 }
                 _ => (),
-            })
+            }
+        })
     }
 
-    fn exit<T>(target: &EventLoopWindowTarget<T>) {
+    fn exit(target: &mut ControlFlow) {
         println!("Exiting...");
-        target.exit();
+        target.set_exit();
     }
 
     fn update(cpu: &mut Cpu, window: &mut Window, screen_renderer: &mut Pixels) {
@@ -115,30 +126,32 @@ impl Emulator {
         }
     }
 
-    fn on_input(cpu: &mut Cpu, event: &KeyEvent) {
-        if let Some(chip8_key) = Emulator::get_chip8_key_code(&event.logical_key) {
-            cpu.keys[chip8_key as usize] = event.state == ElementState::Pressed;
+    fn on_input(cpu: &mut Cpu, event: &KeyboardInput) {
+        if let Some(keycode) = event.virtual_keycode {
+            if let Some(chip8_key) = Emulator::get_chip8_key_code(&keycode) {
+                cpu.keys[chip8_key as usize] = event.state == ElementState::Pressed;
+            }
         }
     }
 
-    fn get_chip8_key_code(key: &Key) -> Option<u8> {
-        match key.as_ref() {
-            Key::Character("1") => Some(0x1),
-            Key::Character("2") => Some(0x2),
-            Key::Character("3") => Some(0x3),
-            Key::Character("4") => Some(0xC),
-            Key::Character("q") => Some(0x4),
-            Key::Character("w") => Some(0x5),
-            Key::Character("e") => Some(0x6),
-            Key::Character("r") => Some(0xD),
-            Key::Character("a") => Some(0x7),
-            Key::Character("s") => Some(0x8),
-            Key::Character("d") => Some(0x9),
-            Key::Character("f") => Some(0xE),
-            Key::Character("z") => Some(0xA),
-            Key::Character("x") => Some(0x0),
-            Key::Character("c") => Some(0xB),
-            Key::Character("v") => Some(0xF),
+    fn get_chip8_key_code(key: &VirtualKeyCode) -> Option<u8> {
+        match key {
+            VirtualKeyCode::Key1 => Some(0x1),
+            VirtualKeyCode::Key2 => Some(0x2),
+            VirtualKeyCode::Key3 => Some(0x2),
+            VirtualKeyCode::Key4 => Some(0xC),
+            VirtualKeyCode::Q => Some(0x4),
+            VirtualKeyCode::W => Some(0x5),
+            VirtualKeyCode::E => Some(0x6),
+            VirtualKeyCode::R => Some(0xD),
+            VirtualKeyCode::A => Some(0x7),
+            VirtualKeyCode::S => Some(0x8),
+            VirtualKeyCode::D => Some(0x9),
+            VirtualKeyCode::F => Some(0xE),
+            VirtualKeyCode::Z => Some(0xA),
+            VirtualKeyCode::X => Some(0x0),
+            VirtualKeyCode::C => Some(0xB),
+            VirtualKeyCode::V => Some(0xF),
             _ => None,
         }
     }

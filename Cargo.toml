@@ -5,8 +5,12 @@ authors = ["SaviHex <leosavis@gmail.com>"]
 edition = "2021"
 
 [dependencies]
+pixels = { path = "deps/pixels" }
 env_logger = "0.11.3"
-pixels = "0.13.0"
-winit = { version = "0.29.15", features = ["rwh_05"] }
-winit_input_helper = "0.16.0"
+winit = "0.28"
 rand = "0.8.5"
+egui = "0.23.0"
+egui-wgpu = "0.23.0"
+egui-winit = { version = "0.23.0", default-features = false, features = [
+    "links",
+] }

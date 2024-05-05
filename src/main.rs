@@ -7,7 +7,5 @@ fn main() {
         println!("Cannot open rom! {}", err);
     });
 
-    emulator.run().unwrap_or_else(|err| {
-        println!("Oh no! {}", err);
-    });
+    emulator.run();
 }

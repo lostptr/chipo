@@ -118,7 +118,7 @@ impl Cpu {
     }
 
     fn get_screen_index(x: u8, y: u8) -> usize {
-        (usize::from(y) * SCREEN_WIDTH) + usize::from(x)
+        ((usize::from(y) % SCREEN_HEIGHT) * SCREEN_WIDTH) + (usize::from(x) % SCREEN_WIDTH)
     }
 
     /// Draws on screen (gonna be a bit more especific later...)

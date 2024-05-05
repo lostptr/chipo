@@ -1,0 +1,3 @@
+[submodule "deps/pixels"]
+	path = deps/pixels
+	url = https://github.com/parasyte/pixels.git
