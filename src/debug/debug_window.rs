@@ -1,3 +1,5 @@
+use crate::emulator::cpu::Cpu;
+
 pub struct DebugWindow {
     is_open: bool,
     current_opcode: u16,
@@ -27,47 +29,44 @@ impl DebugWindow {
         }
     }
 
-    pub fn update(&mut self, ctx: &egui::Context) {
-        egui::TopBottomPanel::top("menubar_container").show(ctx, |ui| {
-            egui::menu::bar(ui, |ui| {
-                ui.menu_button("Debug", |ui| {
-                    if ui.button("About...").clicked() {
-                        self.is_open = true;
-                        ui.close_menu();
-                    }
-                })
-            })
-        });
+    pub fn toggle_open(&mut self) {
+        self.is_open = !self.is_open;
+    }
 
+    pub fn update(&mut self, cpu: &Cpu) {
+        self.current_opcode = cpu.opcode;
+        self.counter = cpu.pc;
+        self.registers = cpu.v;
+    }
+
+    pub fn redraw(&mut self, ctx: &egui::Context) {
         egui::Window::new("Debug window")
             .open(&mut self.is_open)
             .show(ctx, |ui| {
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
-                        ui.strong("OPCODE");
-                        ui.monospace(format!("{:#06X}", self.current_opcode));
-                        ui.add_space(16.0);
-                        ui.strong("PC");
-                        ui.monospace(format!("{:#06X}", self.counter));
-                    });
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
+                    ui.strong("OPCODE");
+                    ui.monospace(format!("{:#06X}", self.current_opcode));
+                    ui.add_space(16.0);
+                    ui.strong("PC");
+                    ui.monospace(format!("{:#06X}", self.counter));
+                });
 
-                    ui.add_space(4.0);
-                    ui.separator();
-                    ui.add_space(4.0);
+                ui.add_space(4.0);
+                ui.separator();
+                ui.add_space(4.0);
 
-                    ui.heading("Registers");
-                    ui.add_space(4.0);
+                ui.heading("Registers");
+                ui.add_space(4.0);
 
-                    ui.columns(4, |columns| {
-                        for (i, register) in self.registers.iter().enumerate() {
-                            columns[i / 4].group(|ui| {
-                                ui.horizontal(|ui| {
-                                    ui.strong(format!("{:#X}", i).replace("0x", ""));
-                                    ui.monospace(format!("{:#06X}", register));
-                                });
+                ui.columns(4, |columns| {
+                    for (i, register) in self.registers.iter().enumerate() {
+                        columns[i / 4].group(|ui| {
+                            ui.horizontal(|ui| {
+                                ui.strong(format!("{:#X}", i).replace("0x", ""));
+                                ui.monospace(format!("{:#06X}", register));
                             });
-                        }
-                    });
+                        });
+                    }
                 });
             });
     }

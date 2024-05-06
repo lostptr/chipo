@@ -1,7 +1,12 @@
 use egui::{ClippedPrimitive, Context, TexturesDelta};
-use pixels::{wgpu, PixelsContext};
 use egui_wgpu::renderer::{Renderer, ScreenDescriptor};
-use winit::event_loop::EventLoopWindowTarget;
+use pixels::{wgpu, PixelsContext};
+use winit::{
+    event::{ElementState, VirtualKeyCode, WindowEvent},
+    event_loop::EventLoopWindowTarget,
+};
+
+use crate::emulator::cpu::Cpu;
 
 use super::debug_window::DebugWindow;
 
@@ -51,6 +56,19 @@ impl EguiWinitFramework {
 
     /// Handle input events from the window manager.
     pub(crate) fn handle_event(&mut self, event: &winit::event::WindowEvent) {
+        match event {
+            WindowEvent::KeyboardInput { input, .. } => {
+                if input.state == ElementState::Pressed {
+                    if let Some(keycode) = input.virtual_keycode {
+                        if keycode == VirtualKeyCode::Space {
+                            self.gui.toggle_open();
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+
         let _ = self.egui_state.on_event(&self.egui_context, event);
     }
 
@@ -72,7 +90,7 @@ impl EguiWinitFramework {
         let raw_input = self.egui_state.take_egui_input(window);
         let output = self.egui_context.run(raw_input, |egui_ctx| {
             // Draw the demo application.
-            self.gui.update(egui_ctx);
+            self.gui.redraw(egui_ctx);
         });
 
         self.textures.append(output.textures_delta);
@@ -125,5 +143,9 @@ impl EguiWinitFramework {
         for id in &textures.free {
             self.renderer.free_texture(id);
         }
+    }
+
+    pub fn update_cpu(&mut self, cpu: &Cpu) {
+        self.gui.update(cpu);
     }
 }

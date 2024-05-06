@@ -19,6 +19,7 @@ pub struct Emulator {
     window: Window,
     screen_renderer: Pixels,
     cpu: Cpu,
+    framework: EguiWinitFramework,
 }
 
 impl Emulator {
@@ -59,6 +60,7 @@ impl Emulator {
             event_loop,
             screen_renderer,
             cpu: Cpu::new(),
+            framework,
         }
     }
 
@@ -88,13 +90,15 @@ impl Emulator {
                     event: WindowEvent::CloseRequested,
                     ..
                 } => Emulator::exit(control_flow),
-                Event::WindowEvent {
-                    event: WindowEvent::KeyboardInput { input, .. },
-                    ..
-                } => Emulator::on_input(&mut self.cpu, &input),
-                Event::MainEventsCleared => {
-                    Emulator::update(&mut self.cpu, &mut self.window, &mut self.screen_renderer)
+                Event::WindowEvent { event, .. } => {
+                    Emulator::on_input(&mut self.cpu, &event, &mut self.framework)
                 }
+                Event::MainEventsCleared => Emulator::update(
+                    &mut self.cpu,
+                    &mut self.window,
+                    &mut self.screen_renderer,
+                    &mut self.framework,
+                ),
                 _ => (),
             }
         })
@@ -105,32 +109,57 @@ impl Emulator {
         target.set_exit();
     }
 
-    fn update(cpu: &mut Cpu, window: &mut Window, screen_renderer: &mut Pixels) {
+    fn update(
+        cpu: &mut Cpu,
+        window: &mut Window,
+        screen_renderer: &mut Pixels,
+        framework: &mut EguiWinitFramework,
+    ) {
         cpu.run_instruction();
         cpu.tick_timers();
 
+        framework.prepare(window);
+
         if cpu.draw_flag {
-            for (i, pixel) in screen_renderer.frame_mut().chunks_exact_mut(4).enumerate() {
-                let color = if cpu.screen[i] > 0 {
-                    [0xFF, 0xFF, 0xFF, 0xFF]
-                } else {
-                    [0x00, 0x00, 0x00, 0x00]
-                };
-                pixel.copy_from_slice(&color);
-            }
-            screen_renderer.render().unwrap_or_else(|err| {
-                println!("Error at screen_renderer::render(): {}", err);
-                return;
-            });
+            framework.update_cpu(cpu);
+            Emulator::draw_frame(cpu, screen_renderer, framework);
             window.request_redraw();
         }
     }
 
-    fn on_input(cpu: &mut Cpu, event: &KeyboardInput) {
-        if let Some(keycode) = event.virtual_keycode {
-            if let Some(chip8_key) = Emulator::get_chip8_key_code(&keycode) {
-                cpu.keys[chip8_key as usize] = event.state == ElementState::Pressed;
-            }
+    fn draw_frame(cpu: &mut Cpu, screen_renderer: &mut Pixels, framework: &mut EguiWinitFramework) {
+        for (i, pixel) in screen_renderer.frame_mut().chunks_exact_mut(4).enumerate() {
+            let color = if cpu.screen[i] > 0 {
+                [0xFF, 0xFF, 0xFF, 0xFF]
+            } else {
+                [0x00, 0x00, 0x00, 0x00]
+            };
+            pixel.copy_from_slice(&color);
+        }
+        let render_result = screen_renderer.render_with(|encoder, render_target, context| {
+            context.scaling_renderer.render(encoder, render_target);
+            framework.render(encoder, render_target, context);
+            Ok(())
+        });
+
+        if let Err(err) = render_result {
+            println!("oh no!! {}", err);
+        }
+    }
+
+    fn on_input(cpu: &mut Cpu, event: &WindowEvent, framework: &mut EguiWinitFramework) {
+        match event {
+            WindowEvent::KeyboardInput { input, .. } => {
+                if let Some(keycode) = input.virtual_keycode {
+                    if let Some(chip8_key) = Emulator::get_chip8_key_code(&keycode) {
+                        cpu.keys[chip8_key as usize] = input.state == ElementState::Pressed;
+                    } else {
+                        // make gui accept input event
+                        framework.handle_event(event);
+                    }
+                }
+            },
+            _ => framework.handle_event(event),
         }
     }
 

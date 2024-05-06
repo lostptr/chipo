@@ -151,8 +151,7 @@ impl Cpu {
         }
 
         self.draw_flag = false;
-
-        println!("opcode {:#X}", opcode);
+        self.opcode = opcode;
 
         match opcode & 0xF000 {
             0x0000 => match opcode & 0x00FF {

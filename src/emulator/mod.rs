@@ -1,3 +1,2 @@
 pub mod emulator;
-
-mod cpu;
+pub mod cpu;
