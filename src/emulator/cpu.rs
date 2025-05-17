@@ -65,6 +65,9 @@ pub struct Cpu {
     pub draw_flag: bool,
 
     rng: ThreadRng,
+
+    // Used to get the correct bahaviour for FX0A.
+    pressed_key_index: Option<usize>,
 }
 
 impl Cpu {
@@ -87,6 +90,7 @@ impl Cpu {
 
             draw_flag: false,
             rng: thread_rng(),
+            pressed_key_index: None,
         };
 
         // Place the font sprites int the interpreter area of the ram
@@ -516,12 +520,20 @@ impl Cpu {
 
     /// ## 0xFX0A
     /// Waits for a key press and then stores that key in VX.
+    /// We only resume once the key is released.
     fn op_fx0a(&mut self, x: usize) {
-        for i in 0..16 {
-            if self.keys[i] {
-                self.v[x] = i as u8;
+        if let Some(key_index) = self.pressed_key_index {
+            if !self.keys[key_index] {
+                self.pressed_key_index = None;
+                self.v[x] = key_index as u8;
                 self.inc_pc();
                 return;
+            }
+        } else {
+            for i in 0..16 {
+                if self.keys[i] {
+                    self.pressed_key_index = Some(i);
+                }
             }
         }
     }
