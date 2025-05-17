@@ -35,7 +35,7 @@ impl Emulator {
                 .with_inner_size(size)
                 .with_min_inner_size(size)
                 .build(&event_loop)
-                .unwrap()
+                .unwrap() // todo: handle this unwrap
         };
 
         let (screen_renderer, framework) = {
@@ -93,6 +93,7 @@ impl Emulator {
                 Event::WindowEvent { event, .. } => {
                     Emulator::on_input(&mut self.cpu, &event, &mut self.framework)
                 }
+                // todo: why not use mutable self in emulator.update ?
                 Event::MainEventsCleared => Emulator::update(
                     &mut self.cpu,
                     &mut self.window,
@@ -167,7 +168,7 @@ impl Emulator {
         match key {
             VirtualKeyCode::Key1 => Some(0x1),
             VirtualKeyCode::Key2 => Some(0x2),
-            VirtualKeyCode::Key3 => Some(0x2),
+            VirtualKeyCode::Key3 => Some(0x3),
             VirtualKeyCode::Key4 => Some(0xC),
             VirtualKeyCode::Q => Some(0x4),
             VirtualKeyCode::W => Some(0x5),
