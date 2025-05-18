@@ -1,5 +1,4 @@
 use super::cpu::{Cpu, PROGRAM_START, SCREEN_HEIGHT, SCREEN_WIDTH};
-use crate::debug::egui_winit_framework::EguiWinitFramework;
 use pixels::{Pixels, SurfaceTexture};
 use std::{
     fs::File,
@@ -7,7 +6,7 @@ use std::{
 };
 use winit::{
     dpi::LogicalSize,
-    event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
+    event::{ElementState, Event, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::{Window, WindowBuilder},
 };
@@ -19,7 +18,6 @@ pub struct Emulator {
     window: Window,
     screen_renderer: Pixels,
     cpu: Cpu,
-    framework: EguiWinitFramework,
 }
 
 impl Emulator {
@@ -38,21 +36,12 @@ impl Emulator {
                 .unwrap() // todo: handle this unwrap
         };
 
-        let (screen_renderer, framework) = {
+        let screen_renderer = {
             let window_size = window.inner_size();
             let surface_texture =
                 SurfaceTexture::new(window_size.width, window_size.height, &window);
-            let pixels =
-                Pixels::new(SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32, surface_texture).unwrap();
-            let framework = EguiWinitFramework::new(
-                &event_loop,
-                window_size.width,
-                window_size.height,
-                window.scale_factor() as f32,
-                &pixels,
-            );
 
-            (pixels, framework)
+            Pixels::new(SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32, surface_texture).unwrap()
         };
 
         Self {
@@ -60,7 +49,6 @@ impl Emulator {
             event_loop,
             screen_renderer,
             cpu: Cpu::new(),
-            framework,
         }
     }
 
@@ -90,16 +78,11 @@ impl Emulator {
                     event: WindowEvent::CloseRequested,
                     ..
                 } => Emulator::exit(control_flow),
-                Event::WindowEvent { event, .. } => {
-                    Emulator::on_input(&mut self.cpu, &event, &mut self.framework)
-                }
+                Event::WindowEvent { event, .. } => Emulator::on_input(&mut self.cpu, &event),
                 // todo: why not use mutable self in emulator.update ?
-                Event::MainEventsCleared => Emulator::update(
-                    &mut self.cpu,
-                    &mut self.window,
-                    &mut self.screen_renderer,
-                    &mut self.framework,
-                ),
+                Event::MainEventsCleared => {
+                    Emulator::update(&mut self.cpu, &mut self.window, &mut self.screen_renderer)
+                }
                 _ => (),
             }
         })
@@ -110,25 +93,17 @@ impl Emulator {
         target.set_exit();
     }
 
-    fn update(
-        cpu: &mut Cpu,
-        window: &mut Window,
-        screen_renderer: &mut Pixels,
-        framework: &mut EguiWinitFramework,
-    ) {
+    fn update(cpu: &mut Cpu, window: &mut Window, screen_renderer: &mut Pixels) {
         cpu.run_instruction();
         cpu.tick_timers();
 
-        framework.prepare(window);
-
         if cpu.draw_flag {
-            framework.update_cpu(cpu);
-            Emulator::draw_frame(cpu, screen_renderer, framework);
+            Emulator::draw_frame(cpu, screen_renderer);
             window.request_redraw();
         }
     }
 
-    fn draw_frame(cpu: &mut Cpu, screen_renderer: &mut Pixels, framework: &mut EguiWinitFramework) {
+    fn draw_frame(cpu: &mut Cpu, screen_renderer: &mut Pixels) {
         for (i, pixel) in screen_renderer.frame_mut().chunks_exact_mut(4).enumerate() {
             let color = if cpu.screen[i] > 0 {
                 [0xFF, 0xFF, 0xFF, 0xFF]
@@ -139,7 +114,6 @@ impl Emulator {
         }
         let render_result = screen_renderer.render_with(|encoder, render_target, context| {
             context.scaling_renderer.render(encoder, render_target);
-            framework.render(encoder, render_target, context);
             Ok(())
         });
 
@@ -148,19 +122,16 @@ impl Emulator {
         }
     }
 
-    fn on_input(cpu: &mut Cpu, event: &WindowEvent, framework: &mut EguiWinitFramework) {
+    fn on_input(cpu: &mut Cpu, event: &WindowEvent) {
         match event {
             WindowEvent::KeyboardInput { input, .. } => {
                 if let Some(keycode) = input.virtual_keycode {
                     if let Some(chip8_key) = Emulator::get_chip8_key_code(&keycode) {
                         cpu.keys[chip8_key as usize] = input.state == ElementState::Pressed;
-                    } else {
-                        // make gui accept input event
-                        framework.handle_event(event);
                     }
                 }
-            },
-            _ => framework.handle_event(event),
+            }
+            _ => {}
         }
     }
 
