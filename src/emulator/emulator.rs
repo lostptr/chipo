@@ -13,7 +13,6 @@ use winit::{
 };
 
 const SCALING: usize = 8;
-const TICKS_PER_FRAME: u16 = 1;
 
 pub struct Emulator {
     event_loop: EventLoop<()>,
@@ -117,9 +116,7 @@ impl Emulator {
         screen_renderer: &mut Pixels,
         framework: &mut EguiWinitFramework,
     ) {
-        for _ in 0..TICKS_PER_FRAME {
-            cpu.run_instruction();
-        }
+        cpu.run_instruction();
         cpu.tick_timers();
 
         framework.prepare(window);

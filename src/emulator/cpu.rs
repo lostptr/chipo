@@ -151,11 +151,13 @@ impl Cpu {
         let opcode = (low << 8) | high; // Big-Endian
 
         if high == 0 && low == 0 {
-            panic!()
+            panic!("opcode is zero");
         }
 
         self.draw_flag = false;
         self.opcode = opcode;
+
+        println!("opcode {:#x}", opcode);
 
         match opcode & 0xF000 {
             0x0000 => match opcode & 0x00FF {
@@ -237,18 +239,6 @@ impl Cpu {
                 self.op_dxyn(x, y, nibble);
             }
             0xE000 => {
-                // if self.keys.contains(&true) {
-                //     println!("opcode: {}", opcode);
-                //     println!(
-                //         "keys: {:?}",
-                //         self.keys.into_iter().enumerate().filter_map(|(i, k)| if k {
-                //             Some(i)
-                //         } else {
-                //             None
-                //         }).collect::<Vec<usize>>()
-                //     )
-                // }
-
                 let x = ((opcode & 0x0F00) >> 8) as usize;
                 match opcode & 0x00FF {
                     0x009E => self.op_ex9e(x),
@@ -476,12 +466,15 @@ impl Cpu {
         let x_pos = self.v[x] % (SCREEN_WIDTH as u8);
         let y_pos = self.v[y] % (SCREEN_HEIGHT as u8);
 
+        println!("drawing at ({}, {}) sprite {}x8", x_pos, y_pos, height);
+
         // Set pixel collision false.
         self.v[0xF] = 0;
 
         for row in 0..height {
             // Clip sprite if it goes past the bottom of the screen.
             if (y_pos + row) >= (SCREEN_HEIGHT as u8) {
+                println!("skipping drawing at row {}", row);
                 break;
             }
             let mut pixel = self.read(self.i + (row as u16));
@@ -490,6 +483,7 @@ impl Cpu {
             for col in 0..8 {
                 // Clip sprite if it goes past the left side of the screen.
                 if (x_pos + col) >= (SCREEN_WIDTH as u8) {
+                    println!("skipping drawing at col {}", row);
                     break;
                 }
 
