@@ -125,7 +125,7 @@ impl Cpu {
         ((usize::from(y) % SCREEN_HEIGHT) * SCREEN_WIDTH) + (usize::from(x) % SCREEN_WIDTH)
     }
 
-    /// Draws on screen (gonna be a bit more especific later...)
+    /// Draws on screen memory address.
     /// Returns `true` if there's pixel collision.
     fn set_screen_pixel(&mut self, x: u8, y: u8, value: u8) -> bool {
         let old = self.screen[Cpu::get_screen_index(x, y)];
@@ -361,6 +361,7 @@ impl Cpu {
     /// ## 0x8XY1
     /// Sets VX to (VX 'OR' VY)
     fn op_8xy1(&mut self, x: usize, y: usize) {
+        self.v[0xF] = 0; // original chip8 quirk: reset flag register to zero.
         self.v[x] = self.v[x] | self.v[y];
         self.inc_pc();
     }
@@ -368,6 +369,7 @@ impl Cpu {
     /// ## 0x8XY2
     /// Sets VX to (VX 'AND' VY)
     fn op_8xy2(&mut self, x: usize, y: usize) {
+        self.v[0xF] = 0; // original chip8 quirk: reset flag register to zero.
         self.v[x] = self.v[x] & self.v[y];
         self.inc_pc();
     }
@@ -375,6 +377,7 @@ impl Cpu {
     /// ## 0x8XY3
     /// Sets VX to (VX 'XOR' VY)
     fn op_8xy3(&mut self, x: usize, y: usize) {
+        self.v[0xF] = 0; // original chip8 quirk: reset flag register to zero.
         self.v[x] = self.v[x] ^ self.v[y];
         self.inc_pc();
     }
@@ -403,7 +406,8 @@ impl Cpu {
 
     /// ## 0x8XY6
     /// Set VX = VX SHIFT RIGHT 1, VF = the least significant bit.
-    fn op_8xy6(&mut self, x: usize, _y: usize) {
+    fn op_8xy6(&mut self, x: usize, y: usize) {
+        self.v[x] = self.v[y]; // original chip8 quirk: set VX to VY
         let least_bit = self.v[x] & 0b0000_0001;
 
         let carry_flag = if least_bit == 0 { 0 } else { 1 };
@@ -425,7 +429,8 @@ impl Cpu {
 
     /// ## 0x8XYE
     /// Set VX = VX SHIFT LEFT 1, VF = the most significant bit.
-    fn op_8xye(&mut self, x: usize, _y: usize) {
+    fn op_8xye(&mut self, x: usize, y: usize) {
+        self.v[x] = self.v[y]; // original chip8 quirk: set VX to VY
         let most_bit = self.v[x] & 0b1000_0000;
 
         let carry_flag = if most_bit == 0 { 0 } else { 1 };
@@ -475,10 +480,19 @@ impl Cpu {
         self.v[0xF] = 0;
 
         for row in 0..height {
+            // Clip sprite if it goes past the bottom of the screen.
+            if (y_pos + row) >= (SCREEN_HEIGHT as u8) {
+                break;
+            }
             let mut pixel = self.read(self.i + (row as u16));
 
             // Width is 8 bytes
             for col in 0..8 {
+                // Clip sprite if it goes past the left side of the screen.
+                if (x_pos + col) >= (SCREEN_WIDTH as u8) {
+                    break;
+                }
+
                 if self.set_screen_pixel(x_pos + col, y_pos + row, (pixel & 0b1000_0000) >> 7) {
                     self.v[0xF] = 1; // There was pixel colision.
                 }
@@ -589,6 +603,7 @@ impl Cpu {
         for offset in 0..x + 1 {
             self.write(self.i + offset as u16, self.v[offset]);
         }
+        self.i += 1; // original chip8 quirk: I is incremented after save.
         self.inc_pc();
     }
 
@@ -598,6 +613,7 @@ impl Cpu {
         for offset in 0..x + 1 {
             self.v[offset] = self.read(self.i + offset as u16);
         }
+        self.i += 1; // original chip8 quirk: I is incremented after load.
         self.inc_pc();
     }
 }

@@ -29,8 +29,8 @@ theres a submodule here to use pixels, dont forget to pull it!
 - ✅ 3-corax+.ch8
 - ✅ 4-flags.ch8
 - ❌ 5-quirks.ch8
-- ⚪ 6-keypad.ch8
+- ✅ 6-keypad.ch8
 - ❓ BC_test.ch8
-- ⚪ PONG
+- ✅ PONG
 - ⚪ TETRIS
 - ⚪ INVADERS
