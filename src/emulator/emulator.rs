@@ -18,6 +18,7 @@ pub struct Emulator {
     window: Window,
     screen_renderer: Pixels,
     cpu: Cpu,
+    frames: u16,
 }
 
 impl Emulator {
@@ -49,6 +50,7 @@ impl Emulator {
             event_loop,
             screen_renderer,
             cpu: Cpu::new(),
+            frames: 0,
         }
     }
 
@@ -81,7 +83,7 @@ impl Emulator {
                 Event::WindowEvent { event, .. } => Emulator::on_input(&mut self.cpu, &event),
                 // todo: why not use mutable self in emulator.update ?
                 Event::MainEventsCleared => {
-                    Emulator::update(&mut self.cpu, &mut self.window, &mut self.screen_renderer)
+                    Emulator::update(&mut self.cpu, &mut self.window, &mut self.screen_renderer, &mut self.frames);
                 }
                 _ => (),
             }
@@ -93,9 +95,13 @@ impl Emulator {
         target.set_exit();
     }
 
-    fn update(cpu: &mut Cpu, window: &mut Window, screen_renderer: &mut Pixels) {
+    fn update(cpu: &mut Cpu, window: &mut Window, screen_renderer: &mut Pixels, frames: &mut u16) {
         cpu.run_instruction();
-        cpu.tick_timers();
+        *frames += 1;
+        if *frames > 30 {
+            cpu.tick_timers();
+            *frames = 0;
+        }
 
         if cpu.draw_flag {
             Emulator::draw_frame(cpu, screen_renderer);
