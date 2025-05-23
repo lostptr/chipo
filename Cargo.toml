@@ -1,7 +1,7 @@
 [package]
 name = "chipo"
 version = "0.1.0"
-authors = ["SaviHex <leosavis@gmail.com>"]
+authors = ["lostptr <leosavis@gmail.com>"]
 edition = "2021"
 
 [dependencies]
