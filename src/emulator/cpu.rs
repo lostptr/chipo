@@ -1,5 +1,5 @@
 use rand::{prelude::ThreadRng, thread_rng, Rng};
-use std::fmt;
+use std::{collections::HashSet, fmt};
 
 /// Chip-8 has 16 sprites of 5 bytes (16 * 5 = 80)
 ///
@@ -57,9 +57,7 @@ pub struct Cpu {
     pub stack: Vec<u16>,
 
     /// Keyboard with 16 keys.
-    ///
-    /// For simplicity I'm using a bool slice but I could use
-    /// a single u16 and check the key presses with bitwise operations.
+    /// `true` = pressed
     pub keys: [bool; 16],
 
     pub draw_flag: bool,
@@ -68,6 +66,8 @@ pub struct Cpu {
 
     // Used to get the correct bahaviour for FX0A.
     pressed_key_index: Option<usize>,
+
+    debug: HashSet<String>,
 }
 
 impl Cpu {
@@ -91,6 +91,7 @@ impl Cpu {
             draw_flag: false,
             rng: thread_rng(),
             pressed_key_index: None,
+            debug: HashSet::new(),
         };
 
         // Place the font sprites int the interpreter area of the ram
@@ -137,6 +138,13 @@ impl Cpu {
         }
 
         self.screen[Cpu::get_screen_index(x, y)] != old
+    }
+    
+    fn print_debug(&mut self, routine: &str) {
+        if !self.debug.contains(routine) && false {
+            println!("opcode {}", routine);
+            self.debug.insert(String::from(routine));
+        }
     }
 
     /// Increments PC by 2
@@ -268,6 +276,7 @@ impl Cpu {
     /// ## 0x00E0
     /// Clears the screen.
     fn op_00e0(&mut self) {
+        self.print_debug("00e0");
         for pixel in self.screen.iter_mut() {
             *pixel = 0;
         }
@@ -279,6 +288,7 @@ impl Cpu {
     /// ## 0x00EE
     /// Returns from subroutine.
     fn op_00ee(&mut self) {
+        self.print_debug("00ee");
         if let Some(value) = self.stack.pop() {
             self.pc = value;
             self.inc_pc();
@@ -290,12 +300,14 @@ impl Cpu {
     /// ## 0x1NNN
     /// Jumps to address NNN (does not increment stack).
     fn op_1nnn(&mut self, nnn: u16) {
+        self.print_debug("1nnn");
         self.pc = nnn;
     }
 
     /// ## 0x2NNN
     /// Calls subroutine on address NNN and increments the stack.
     fn op_2nnn(&mut self, nnn: u16) {
+        self.print_debug("2nnn");
         self.stack.push(self.pc);
         self.pc = nnn;
     }
@@ -303,6 +315,7 @@ impl Cpu {
     /// ## 0x3XNN
     /// Skips next instruction if VX equals NN.
     fn op_3xnn(&mut self, x: usize, nn: u8) {
+        self.print_debug("3xnn");
         if self.v[x] == nn {
             self.inc_pc();
         }
@@ -312,6 +325,7 @@ impl Cpu {
     /// ## 0x4XNN
     /// Skips next instruction if VX not equals NN.
     fn op_4xnn(&mut self, x: usize, nn: u8) {
+        self.print_debug("4xnn");
         if self.v[x] != nn {
             self.inc_pc();
         }
@@ -321,6 +335,7 @@ impl Cpu {
     /// ## 0x5XY0
     /// Skips next instruction if VX equals VY.
     fn op_5xy0(&mut self, x: usize, y: usize) {
+        self.print_debug("5xy0");
         if self.v[x] == self.v[y] {
             self.inc_pc();
         }
@@ -330,6 +345,7 @@ impl Cpu {
     /// ## 0x6XNN
     /// Sets V[X] to NN
     fn op_6xnn(&mut self, x: usize, nn: u8) {
+        self.print_debug("6xnn");
         self.v[x] = nn;
         self.inc_pc();
     }
@@ -337,6 +353,7 @@ impl Cpu {
     /// ## 0x7XNN
     /// Adds NN to VX (Does not change carry flag)
     fn op_7xnn(&mut self, x: usize, nn: u8) {
+        self.print_debug("7xnn");
         self.v[x] = self.v[x].wrapping_add(nn);
         self.inc_pc();
     }
@@ -344,6 +361,7 @@ impl Cpu {
     /// ## 0x8XY0
     /// Sets VX to the value of VY
     fn op_8xy0(&mut self, x: usize, y: usize) {
+        self.print_debug("8xy0");
         self.v[x] = self.v[y];
         self.inc_pc();
     }
@@ -351,6 +369,7 @@ impl Cpu {
     /// ## 0x8XY1
     /// Sets VX to (VX 'OR' VY)
     fn op_8xy1(&mut self, x: usize, y: usize) {
+        self.print_debug("8xy1");
         self.v[0xF] = 0; // original chip8 quirk: reset flag register to zero.
         self.v[x] = self.v[x] | self.v[y];
         self.inc_pc();
@@ -359,6 +378,7 @@ impl Cpu {
     /// ## 0x8XY2
     /// Sets VX to (VX 'AND' VY)
     fn op_8xy2(&mut self, x: usize, y: usize) {
+        self.print_debug("8xy2");
         self.v[0xF] = 0; // original chip8 quirk: reset flag register to zero.
         self.v[x] = self.v[x] & self.v[y];
         self.inc_pc();
@@ -367,6 +387,7 @@ impl Cpu {
     /// ## 0x8XY3
     /// Sets VX to (VX 'XOR' VY)
     fn op_8xy3(&mut self, x: usize, y: usize) {
+        self.print_debug("8xy3");
         self.v[0xF] = 0; // original chip8 quirk: reset flag register to zero.
         self.v[x] = self.v[x] ^ self.v[y];
         self.inc_pc();
@@ -375,6 +396,7 @@ impl Cpu {
     /// ## 0x8XY4
     /// Sets VX = VX + VY, VF = carry flag
     fn op_8xy4(&mut self, x: usize, y: usize) {
+        self.print_debug("8xy4");
         let sum: u16 = self.v[x] as u16 + self.v[y] as u16;
 
         let carry_flag = if sum > 255 { 1 } else { 0 };
@@ -387,6 +409,7 @@ impl Cpu {
     /// ## 0x8XY5
     /// Sets VX = VX - VY, VF = not borrow flag
     fn op_8xy5(&mut self, x: usize, y: usize) {
+        self.print_debug("8xy5");
         let (diff, overflow) = self.v[x].overflowing_sub(self.v[y]);
 
         self.v[x] = diff;
@@ -397,6 +420,7 @@ impl Cpu {
     /// ## 0x8XY6
     /// Set VX = VX SHIFT RIGHT 1, VF = the least significant bit.
     fn op_8xy6(&mut self, x: usize, y: usize) {
+        self.print_debug("8xy6");
         self.v[x] = self.v[y]; // original chip8 quirk: set VX to VY
         let least_bit = self.v[x] & 0b0000_0001;
 
@@ -410,6 +434,7 @@ impl Cpu {
     /// ## 0x8XY7
     /// Set VX = VY - VX. VF = not borrow flag.
     fn op_8xy7(&mut self, x: usize, y: usize) {
+        self.print_debug("8xy7");
         let (diff, overflow) = self.v[y].overflowing_sub(self.v[x]);
 
         self.v[x] = diff;
@@ -420,6 +445,7 @@ impl Cpu {
     /// ## 0x8XYE
     /// Set VX = VX SHIFT LEFT 1, VF = the most significant bit.
     fn op_8xye(&mut self, x: usize, y: usize) {
+        self.print_debug("8xye");
         self.v[x] = self.v[y]; // original chip8 quirk: set VX to VY
         let most_bit = self.v[x] & 0b1000_0000;
 
@@ -433,6 +459,7 @@ impl Cpu {
     /// ## 0x9XY0
     /// Skip next instruction if VX != VY
     fn op_9xy0(&mut self, x: usize, y: usize) {
+        self.print_debug("9xy0");
         if self.v[x] != self.v[y] {
             self.inc_pc();
         }
@@ -442,6 +469,7 @@ impl Cpu {
     /// ## 0xANNN
     /// Sets I to NNN
     fn op_annn(&mut self, nnn: u16) {
+        self.print_debug("annn");
         self.i = nnn;
         self.inc_pc();
     }
@@ -449,12 +477,14 @@ impl Cpu {
     /// ## 0xBNNN
     /// Jumps to address NNN + V0
     fn op_bnnn(&mut self, nnn: u16) {
+        self.print_debug("bnnn");
         self.pc = nnn + (self.v[0] as u16);
     }
 
     /// ## 0xCXNN
     /// Sets VX to a random number[0-255] bitwise `AND` NN.
     fn op_cxnn(&mut self, x: usize, nn: u8) {
+        self.print_debug("cxnn");
         let random_num: u8 = self.rng.gen();
         self.v[x] = random_num & nn;
         self.inc_pc();
@@ -463,6 +493,7 @@ impl Cpu {
     /// ## 0xDXYN
     /// Draws to the screen and checks when there's pixel collision.
     fn op_dxyn(&mut self, x: usize, y: usize, height: u8) {
+        self.print_debug("dxyn");
         let x_pos = self.v[x] % (SCREEN_WIDTH as u8);
         let y_pos = self.v[y] % (SCREEN_HEIGHT as u8);
 
@@ -496,12 +527,12 @@ impl Cpu {
         }
 
         self.draw_flag = true;
-        self.inc_pc();
     }
 
     /// ## 0xEX9E
     /// Skips the next instruction if the key in VX is pressed.
     fn op_ex9e(&mut self, x: usize) {
+        self.print_debug("ex9e");
         let key = self.keys[self.v[x] as usize];
         if key {
             self.inc_pc();
@@ -512,6 +543,7 @@ impl Cpu {
     /// ## 0xEXA1
     /// Skips the next instruction if the key in VX is NOT pressed.
     fn op_exa1(&mut self, x: usize) {
+        self.print_debug("exa1");
         let key = self.keys[self.v[x] as usize];
         if !key {
             self.inc_pc();
@@ -522,6 +554,7 @@ impl Cpu {
     /// ## 0xFX07
     /// Sets VX to the value in the delay timer.
     fn op_fx07(&mut self, x: usize) {
+        self.print_debug("fx07");
         self.v[x] = self.delay_timer;
         self.inc_pc();
     }
@@ -530,6 +563,7 @@ impl Cpu {
     /// Waits for a key press and then stores that key in VX.
     /// We only resume once the key is released.
     fn op_fx0a(&mut self, x: usize) {
+        self.print_debug("fx0a");
         if let Some(key_index) = self.pressed_key_index {
             if !self.keys[key_index] {
                 self.pressed_key_index = None;
@@ -549,6 +583,7 @@ impl Cpu {
     /// ## 0xFX15
     /// Sets delay timer to VX.
     fn op_fx15(&mut self, x: usize) {
+        self.print_debug("fx15");
         self.delay_timer = self.v[x];
         self.inc_pc();
     }
@@ -556,6 +591,7 @@ impl Cpu {
     /// ## 0xFX18
     /// Sets sound timer to VX.
     fn op_fx18(&mut self, x: usize) {
+        self.print_debug("fx18");
         self.sound_timer = self.v[x];
         self.inc_pc();
     }
@@ -563,6 +599,7 @@ impl Cpu {
     /// ## 0xFX1E
     /// Adds VX to I, does not affect VF(carry flag).
     fn op_fx1e(&mut self, x: usize) {
+        self.print_debug("fx1e");
         self.i += self.v[x] as u16;
         self.inc_pc();
     }
@@ -570,6 +607,7 @@ impl Cpu {
     /// ## 0xFX29
     /// Sets I to the address of the sprite for digit in VX.
     fn op_fx29(&mut self, x: usize) {
+        self.print_debug("fx29");
         self.i = FONTSET_START_ADDRESS + (self.v[x] as u16 * 5);
         self.inc_pc();
     }
@@ -580,6 +618,7 @@ impl Cpu {
     /// Let VX = 0xFE => 254 in decimal.
     /// Then... I = 2, I+1 = 5, I+2 = 4
     fn op_fx33(&mut self, x: usize) {
+        self.print_debug("fx33");
         let mut value = self.v[x];
         self.write(self.i + 2, value % 10);
         value /= 10;
@@ -594,6 +633,7 @@ impl Cpu {
     /// ## 0xFX55
     /// Stores the bytes from V0 to VX(inclusive) into memory starting from the address stored in I.
     fn op_fx55(&mut self, x: usize) {
+        self.print_debug("fx55");
         for offset in 0..x + 1 {
             self.write(self.i + offset as u16, self.v[offset]);
         }
@@ -604,6 +644,7 @@ impl Cpu {
     /// ## 0xFX65
     /// Fills V0 to VX(inclusive) with bytes starting from the address stored in I.
     fn op_fx65(&mut self, x: usize) {
+        self.print_debug("fx65");
         for offset in 0..x + 1 {
             self.v[offset] = self.read(self.i + offset as u16);
         }
@@ -623,25 +664,5 @@ impl fmt::Debug for Cpu {
         write!(f, "\nStack: {:?}\n", self.stack)?;
 
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn rng() {
-        let mut cpu = Cpu::new();
-
-        for _ in 0..10 {
-            let n: u8 = cpu.rng.gen();
-
-            if n < 0 || n > 255 {
-                panic!("Random number generator out of bounds [0-255]");
-            } else {
-                println!("Number generated: {}", n);
-            }
-        }
     }
 }
