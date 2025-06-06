@@ -7,25 +7,6 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in library 'chipo'",
-            "cargo": {
-                "args": [
-                    "test",
-                    "--no-run",
-                    "--lib",
-                    "--package=chipo"
-                ],
-                "filter": {
-                    "name": "chipo",
-                    "kind": "lib"
-                }
-            },
-            "args": [],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
             "name": "Debug executable 'chipo'",
             "cargo": {
                 "args": [
@@ -38,27 +19,20 @@
                     "kind": "bin"
                 }
             },
-            "args": ["roms/Minimal game [Revival Studios, 2007].ch8"],
+            "args": ["${input:romPick}"],
             "cwd": "${workspaceFolder}"
-        },
+        }
+    ],
+    "inputs": [
         {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug unit tests in executable 'chipo'",
-            "cargo": {
-                "args": [
-                    "test",
-                    "--no-run",
-                    "--bin=chipo",
-                    "--package=chipo"
-                ],
-                "filter": {
-                    "name": "chipo",
-                    "kind": "bin"
-                }
-            },
-            "args": [],
-            "cwd": "${workspaceFolder}"
+            "id": "romPick",
+            "type": "command",
+            "command": "extension.commandvariable.file.pickFile",
+            "args": {
+                "include": "roms/*",
+                "display": "fileName",
+                "description": "Select a rom file"
+            }
         }
     ]
 }

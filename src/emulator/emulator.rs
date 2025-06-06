@@ -3,6 +3,8 @@ use pixels::{Pixels, SurfaceTexture};
 use std::{
     fs::File,
     io::{self, Read},
+    rc::Rc,
+    sync::Arc,
 };
 use winit::{
     dpi::LogicalSize,
@@ -10,45 +12,51 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::{Window, WindowBuilder},
 };
+use winit_input_helper::WinitInputHelper;
 
 const SCALING: usize = 8;
 
-pub struct Emulator {
+pub struct Emulator<'win> {
     event_loop: EventLoop<()>,
-    window: Window,
-    screen_renderer: Pixels,
+    screen_renderer: Pixels<'win>,
+    input: WinitInputHelper,
+    window: Arc<Window>,
     cpu: Cpu,
     frames: u16,
 }
 
-impl Emulator {
-    pub fn new() -> Self {
-        let event_loop = EventLoop::new();
+impl<'win> Emulator<'win> {
+    pub fn new() -> Emulator<'win> {
+        let event_loop = EventLoop::new().unwrap(); // todo: handle this unwrap
         let window = {
             let size = LogicalSize::new(
                 (SCREEN_WIDTH * SCALING) as f64,
                 (SCREEN_HEIGHT * SCALING) as f64,
             );
-            WindowBuilder::new()
-                .with_title("Chipo Emulator")
-                .with_inner_size(size)
-                .with_min_inner_size(size)
-                .build(&event_loop)
-                .unwrap() // todo: handle this unwrap
+
+            Arc::new(
+                WindowBuilder::new()
+                    .with_title("Chipo Emulator")
+                    .with_inner_size(size)
+                    .with_min_inner_size(size)
+                    .build(&event_loop)
+                    .unwrap(), // todo: handle this unwrap
+            )
         };
 
         let screen_renderer = {
             let window_size = window.inner_size();
             let surface_texture =
-                SurfaceTexture::new(window_size.width, window_size.height, &window);
+                SurfaceTexture::new(window_size.width, window_size.height, window.clone());
 
             Pixels::new(SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32, surface_texture).unwrap()
         };
 
         Self {
-            window,
             event_loop,
             screen_renderer,
+            window,
+            input: WinitInputHelper::new(),
             cpu: Cpu::new(),
             frames: 0,
         }
@@ -72,22 +80,42 @@ impl Emulator {
         Ok(buffer)
     }
 
-    pub fn run(mut self) {
-        self.event_loop.run(move |event, _, control_flow| {
-            control_flow.set_poll();
-            match event {
-                Event::WindowEvent {
-                    event: WindowEvent::CloseRequested,
-                    ..
-                } => Emulator::exit(control_flow),
-                Event::WindowEvent { event, .. } => Emulator::on_input(&mut self.cpu, &event),
-                // todo: why not use mutable self in emulator.update ?
-                Event::MainEventsCleared => {
-                    Emulator::update(&mut self.cpu, &mut self.window, &mut self.screen_renderer, &mut self.frames);
-                }
-                _ => (),
+    pub fn run(emulator: &mut Emulator) {
+        let result = emulator.event_loop.run(|event, elwt| {
+            if let Event::WindowEvent {
+                event: WindowEvent::RedrawRequested,
+                ..
+            } = event
+            {
+                // draw...
             }
-        })
+
+            if emulator.input.update(&event) {
+                if emulator.input.close_requested() {
+                    elwt.exit();
+                    return;
+                }
+
+                // emulator input handler...
+            }
+
+            // update
+            emulator.update();
+        });
+        // let a = self.event_loop.run(move |event, elwt| {
+        //     match event {
+        //         Event::WindowEvent {
+        //             event: WindowEvent::CloseRequested,
+        //             ..
+        //         } => Emulator::exit(control_flow),
+        //         Event::WindowEvent { event, .. } => Emulator::on_input(&mut self.cpu, &event),
+        //         // todo: why not use mutable self in emulator.update ?
+        //         Event::MainEventsCleared => {
+        //             Emulator::update(&mut self.cpu, &mut self.window, &mut self.screen_renderer, &mut self.frames);
+        //         },
+        //         _ => (),
+        //     }
+        // })
     }
 
     fn exit(target: &mut ControlFlow) {
@@ -95,30 +123,30 @@ impl Emulator {
         target.set_exit();
     }
 
-    fn update(cpu: &mut Cpu, window: &mut Window, screen_renderer: &mut Pixels, frames: &mut u16) {
-        cpu.run_instruction();
-        *frames += 1;
-        if *frames > 30 {
-            cpu.tick_timers();
-            *frames = 0;
+    fn update(mut self) {
+        self.cpu.run_instruction();
+        self.frames += 1;
+        if self.frames > 30 {
+            self.cpu.tick_timers();
+            self.frames = 0;
         }
 
-        if cpu.draw_flag {
-            Emulator::draw_frame(cpu, screen_renderer);
-            window.request_redraw();
+        if self.cpu.draw_flag {
+            self.draw_frame();
+            self.window.request_redraw();
         }
     }
 
-    fn draw_frame(cpu: &mut Cpu, screen_renderer: &mut Pixels) {
-        for (i, pixel) in screen_renderer.frame_mut().chunks_exact_mut(4).enumerate() {
-            let color = if cpu.screen[i] > 0 {
+    fn draw_frame(mut self) {
+        for (i, pixel) in self.screen_renderer.frame_mut().chunks_exact_mut(4).enumerate() {
+            let color = if self.cpu.screen[i] > 0 {
                 [0xFF, 0xFF, 0xFF, 0xFF]
             } else {
                 [0x00, 0x00, 0x00, 0x00]
             };
             pixel.copy_from_slice(&color);
         }
-        let render_result = screen_renderer.render_with(|encoder, render_target, context| {
+        let render_result = self.screen_renderer.render_with(|encoder, render_target, context| {
             context.scaling_renderer.render(encoder, render_target);
             Ok(())
         });

@@ -1,4 +1,5 @@
-use rand::{prelude::ThreadRng, thread_rng, Rng};
+use log::{debug, info};
+use rand::{prelude::ThreadRng, rng, Rng};
 use std::{collections::HashSet, fmt};
 
 /// Chip-8 has 16 sprites of 5 bytes (16 * 5 = 80)
@@ -89,7 +90,7 @@ impl Cpu {
             opcode: 0,
 
             draw_flag: false,
-            rng: thread_rng(),
+            rng: rng(),
             pressed_key_index: None,
             debug: HashSet::new(),
         };
@@ -102,6 +103,12 @@ impl Cpu {
         }
 
         cpu
+    }
+
+    pub fn load_rom(&mut self, rom: &[u8]) {
+        for i in 0..rom.len() {
+            self.write(PROGRAM_START + (i as u16), rom[i]);
+        }
     }
 
     pub fn read(&self, address: u16) -> u8 {
@@ -119,6 +126,9 @@ impl Cpu {
 
         if self.sound_timer > 0 {
             self.sound_timer -= 1;
+            if self.sound_timer == 0 {
+                info!("buzz!"); // todo: implement sound
+            }
         }
     }
 
@@ -141,7 +151,7 @@ impl Cpu {
     }
     
     fn print_debug(&mut self, routine: &str) {
-        if !self.debug.contains(routine) && false {
+        if !self.debug.contains(routine) {
             println!("opcode {}", routine);
             self.debug.insert(String::from(routine));
         }
@@ -165,7 +175,7 @@ impl Cpu {
         self.draw_flag = false;
         self.opcode = opcode;
 
-        // println!("opcode {:#x}", opcode);
+        debug!("opcode {:#x}", opcode);
 
         match opcode & 0xF000 {
             0x0000 => match opcode & 0x00FF {
@@ -485,7 +495,7 @@ impl Cpu {
     /// Sets VX to a random number[0-255] bitwise `AND` NN.
     fn op_cxnn(&mut self, x: usize, nn: u8) {
         self.print_debug("cxnn");
-        let random_num: u8 = self.rng.gen();
+        let random_num: u8 = self.rng.random();
         self.v[x] = random_num & nn;
         self.inc_pc();
     }
@@ -493,7 +503,6 @@ impl Cpu {
     /// ## 0xDXYN
     /// Draws to the screen and checks when there's pixel collision.
     fn op_dxyn(&mut self, x: usize, y: usize, height: u8) {
-        self.print_debug("dxyn");
         let x_pos = self.v[x] % (SCREEN_WIDTH as u8);
         let y_pos = self.v[y] % (SCREEN_HEIGHT as u8);
 
@@ -527,6 +536,7 @@ impl Cpu {
         }
 
         self.draw_flag = true;
+        self.inc_pc();
     }
 
     /// ## 0xEX9E

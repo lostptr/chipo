@@ -5,12 +5,10 @@ authors = ["lostptr <leosavis@gmail.com>"]
 edition = "2021"
 
 [dependencies]
-pixels = { path = "deps/pixels" }
+rand = "0.9.1"
+# Logs
 env_logger = "0.11.3"
-winit = "0.28"
-rand = "0.8.5"
-egui = "0.23.0"
-egui-wgpu = "0.23.0"
-egui-winit = { version = "0.23.0", default-features = false, features = [
-    "links",
-] }
+log = "0.4.27"
+# Graphics
+pixels = "0.15.0"
+winit = "0.29"
